@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestor de Herramientas de Trabajo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 3px rgba(20,25,35,.08), 0 1px 2px rgba(20,25,35,.04);
+    --shadow-md: 0 4px 14px rgba(20,25,35,.10);
+  }
+  html[data-theme="light"]{
+    --bg:#f3f5f8;
+    --bg-card:#ffffff;
+    --bg-soft:#eef1f5;
+    --text:#1c2230;
+    --text-muted:#6b7280;
+    --border:#e2e6ec;
+    --input-bg:#ffffff;
+    --success:#178a4c;
+    --success-bg:#e5f7ee;
+    --danger:#c62b2b;
+    --danger-bg:#fdeaea;
+    --warning:#b4790a;
+    --warning-bg:#fdf2df;
+  }
+  html[data-theme="dark"]{
+    --bg:#12151c;
+    --bg-card:#1a1e28;
+    --bg-soft:#20242f;
+    --text:#e8eaf0;
+    --text-muted:#98a0af;
+    --border:#2b303c;
+    --input-bg:#20242f;
+    --success:#3ecf8e;
+    --success-bg:#123527;
+    --danger:#ff6b6b;
+    --danger-bg:#3a1a1a;
+    --warning:#f0b23c;
+    --warning-bg:#3a2c11;
+  }
+  html[data-accent="azul"]{ --accent:#2563eb; --accent-dark:#1d4ed8; --accent-light:#dbeafe; --accent-light-dark:#1e3a68;}
+  html[data-accent="verde"]{ --accent:#17a24a; --accent-dark:#12833b; --accent-light:#daf5e6; --accent-light-dark:#12402a;}
+  html[data-accent="naranja"]{ --accent:#e8690c; --accent-dark:#c1560a; --accent-light:#fde3cc; --accent-light-dark:#4a2c10;}
+  html[data-accent="rojo"]{ --accent:#d92d2d; --accent-dark:#b32323; --accent-light:#fadada; --accent-light-dark:#4a1818;}
+  html[data-theme="dark"] { --accent-light: var(--accent-light-dark); }
+
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    transition:background .2s ease, color .2s ease;
+  }
+  ::selection{ background:var(--accent-light); }
+
+  header.app-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 24px; background:var(--bg-card); border-bottom:1px solid var(--border);
+    position:sticky; top:0; z-index:50; gap:16px; flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-badge{
+    width:36px; height:36px; border-radius:10px; background:var(--accent);
+    display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:16px;
+    flex-shrink:0;
+  }
+  .brand-text h1{ font-size:15px; margin:0; font-weight:700; }
+  .brand-text span{ font-size:12px; color:var(--text-muted); }
+
+  .header-controls{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .swatch-group{ display:flex; gap:6px; padding:4px; background:var(--bg-soft); border-radius:999px; }
+  .swatch{
+    width:22px; height:22px; border-radius:50%; border:2px solid transparent; cursor:pointer;
+    display:block;
+  }
+  .swatch.active{ border-color:var(--text); }
+  .swatch[data-c="azul"]{ background:#2563eb; }
+  .swatch[data-c="verde"]{ background:#17a24a; }
+  .swatch[data-c="naranja"]{ background:#e8690c; }
+  .swatch[data-c="rojo"]{ background:#d92d2d; }
+
+  .icon-btn{
+    background:var(--bg-soft); border:1px solid var(--border); color:var(--text);
+    border-radius:999px; width:36px; height:36px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:16px;
+  }
+  .icon-btn:hover{ background:var(--accent-light); }
+
+  nav.tabs{
+    display:flex; gap:4px; padding:0 24px; background:var(--bg-card); border-bottom:1px solid var(--border);
+    overflow-x:auto;
+  }
+  nav.tabs button{
+    border:none; background:none; padding:12px 14px; font-size:13.5px; font-weight:600; color:var(--text-muted);
+    cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap;
+  }
+  nav.tabs button.active{ color:var(--accent); border-bottom-color:var(--accent); }
+  nav.tabs button:hover{ color:var(--text); }
+
+  main{ max-width:1180px; margin:0 auto; padding:22px 20px 60px; }
+  .view{ display:none; }
+  .view.active{ display:block; animation:fadein .15s ease; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(3px);} to{opacity:1; transform:none;} }
+
+  .grid{ display:grid; gap:18px; }
+  .grid.cols-2{ grid-template-columns:1fr 1fr; }
+  .grid.cols-3{ grid-template-columns:repeat(3,1fr); }
+  .grid.cols-4{ grid-template-columns:repeat(4,1fr); }
+  .grid.cols-5{ grid-template-columns:repeat(5,1fr); }
+  @media(max-width:900px){ .grid.cols-2,.grid.cols-3,.grid.cols-4,.grid.cols-5{ grid-template-columns:1fr; } }
+
+  .card{
+    background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px 20px; box-shadow:var(--shadow);
+  }
+  .card h2{ margin:0 0 4px; font-size:16px; }
+  .card h3{ margin:0 0 14px; font-size:14px; color:var(--text-muted); font-weight:600; }
+  .card .sub{ color:var(--text-muted); font-size:12.5px; margin:0 0 16px; }
+
+  label{ display:block; font-size:12.5px; font-weight:600; color:var(--text-muted); margin:12px 0 5px; }
+  label:first-child{ margin-top:0; }
+  input,select,textarea{
+    width:100%; padding:9px 11px; border-radius:var(--radius-sm); border:1px solid var(--border);
+    background:var(--input-bg); color:var(--text); font-size:14px; font-family:inherit;
+  }
+  input:focus,select:focus,textarea:focus{ outline:2px solid var(--accent); outline-offset:0; border-color:var(--accent); }
+  textarea{ resize:vertical; min-height:56px; }
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    padding:9px 16px; border-radius:999px; border:1px solid transparent; font-weight:700; font-size:13.5px;
+    cursor:pointer; background:var(--accent); color:#fff;
+  }
+  .btn:hover{ background:var(--accent-dark); }
+  .btn.secondary{ background:var(--bg-soft); color:var(--text); border-color:var(--border); }
+  .btn.secondary:hover{ background:var(--border); }
+  .btn.ghost{ background:transparent; color:var(--accent); border-color:var(--accent); }
+  .btn.danger{ background:var(--danger); }
+  .btn.danger:hover{ opacity:.85; }
+  .btn.block{ width:100%; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+  .btn-row{ display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+
+  .pill{
+    display:inline-block; padding:3px 10px; border-radius:999px; font-size:11.5px; font-weight:700;
+  }
+  .pill.ok{ background:var(--success-bg); color:var(--success); }
+  .pill.warn{ background:var(--warning-bg); color:var(--warning); }
+  .pill.bad{ background:var(--danger-bg); color:var(--danger); }
+  .pill.neutral{ background:var(--bg-soft); color:var(--text-muted); }
+
+  .op-card{
+    background:var(--bg-soft); border:1px solid var(--border); border-radius:var(--radius-sm);
+    padding:12px 14px; margin-top:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .op-card .name{ font-weight:700; font-size:14.5px; }
+  .op-card .legajo{ color:var(--text-muted); font-size:12.5px; }
+  .op-card.warn-box{ border-color:var(--warning); background:var(--warning-bg); }
+  .op-card.notfound{ border-color:var(--danger); background:var(--danger-bg); color:var(--danger); font-weight:600; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  thead th{
+    text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; color:var(--text-muted);
+    padding:8px 10px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg-card);
+  }
+  tbody td{ padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tbody tr:hover{ background:var(--bg-soft); }
+  tbody tr.row-alert{ background:var(--danger-bg); }
+  tbody tr.row-alert:hover{ background:var(--danger-bg); filter:brightness(.97); }
+  .table-wrap{ overflow-x:auto; max-height:460px; overflow-y:auto; border-radius:var(--radius-sm); border:1px solid var(--border); }
+  .table-wrap table{ border:none; }
+  .table-wrap thead th{ position:sticky; top:0; }
+  .empty-state{ text-align:center; padding:34px 10px; color:var(--text-muted); font-size:13.5px; }
+  .empty-state span{ font-size:26px; display:block; margin-bottom:6px; }
+
+  .toolbar{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; align-items:center; }
+  .toolbar input,.toolbar select{ width:auto; min-width:160px; }
+  .toolbar .grow{ flex:1; min-width:180px; }
+
+  .stat{ display:flex; flex-direction:column; gap:2px; }
+  .stat .num{ font-size:26px; font-weight:800; }
+  .stat .lbl{ font-size:12px; color:var(--text-muted); font-weight:600; }
+
+  .action-tabs{ display:flex; gap:8px; margin-bottom:16px; }
+  .action-tabs button{
+    flex:1; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-soft);
+    font-weight:700; font-size:13.5px; cursor:pointer; color:var(--text-muted);
+  }
+  .action-tabs button.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  .badge-count{
+    background:var(--accent); color:#fff; font-size:10.5px; font-weight:700; border-radius:999px;
+    padding:1px 7px; margin-left:5px;
+  }
+  .badge-count.alert{ background:var(--danger); }
+  .icon-action{ background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:14px; padding:4px 6px; }
+  .icon-action:hover{ color:var(--danger); }
+  .icon-action.edit:hover{ color:var(--accent); }
+  footer.hint{ text-align:center; color:var(--text-muted); font-size:11.5px; padding:26px 0 10px; }
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(10,12,18,.5); display:none; align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .modal-overlay.active{ display:flex; }
+  .modal{ background:var(--bg-card); border-radius:var(--radius); padding:22px; max-width:420px; width:100%; box-shadow:var(--shadow-md); }
+  .modal h3{ margin-top:0; }
+  .chart-box{ position:relative; height:230px; }
+  .two-col-form{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
+  @media(max-width:600px){ .two-col-form{ grid-template-columns:1fr; } }
+  .file-input-hidden{ display:none; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="brand-badge">GH</div>
+    <div class="brand-text">
+      <h1>Gestor de Herramientas de Trabajo</h1>
+      <span>Control de entrega y devolución de dispositivos</span>
+    </div>
+  </div>
+  <div class="header-controls">
+    <div class="swatch-group" id="swatchGroup">
+      <span class="swatch" data-c="azul" title="Azul"></span>
+      <span class="swatch" data-c="verde" title="Verde"></span>
+      <span class="swatch" data-c="naranja" title="Naranja"></span>
+      <span class="swatch" data-c="rojo" title="Rojo"></span>
+    </div>
+    <button class="icon-btn" id="themeToggle" title="Cambiar tema claro/oscuro">🌙</button>
+    <button class="icon-btn" id="exportBtn" title="Exportar datos (backup)">⬇</button>
+    <button class="icon-btn" id="importBtn" title="Importar datos (backup)">⬆</button>
+    <input type="file" id="importFile" class="file-input-hidden" accept="application/json">
+  </div>
+</header>
+
+<nav class="tabs" id="tabsNav">
+  <button data-view="movimientos" class="active">Movimientos</button>
+  <button data-view="dispositivos">Dispositivos</button>
+  <button data-view="personal">Personal</button>
+  <button data-view="inventario">Inventario</button>
+  <button data-view="alarmas">Alarmas <span class="badge-count alert" id="alarmBadge" style="display:none;"></span></button>
+  <button data-view="dashboard">Dashboard</button>
+  <button data-view="reportes">Reportes</button>
+</nav>
+
+<main>
+
+  <!-- VISTA MOVIMIENTOS -->
+  <section class="view active" id="view-movimientos">
+    <div class="grid cols-2">
+      <div class="card">
+        <div class="action-tabs">
+          <button id="tabEntrega" class="active">Entregar dispositivo</button>
+          <button id="tabDevolucion">Registrar devolución</button>
+        </div>
+
+        <!-- ENTREGA -->
+        <div id="panelEntrega">
+          <label>Nº de legajo del operario</label>
+          <input type="text" id="entLegajo" placeholder="Ej: 1042" inputmode="numeric" autocomplete="off">
+          <div id="entOperarioBox"></div>
+
+          <div class="two-col-form">
+            <div>
+              <label>Tipo</label>
+              <select id="entTipoCel">
+                <option value="Celular" selected>Celular</option>
+                <option value="Tablet">Tablet</option>
+              </select>
+            </div>
+            <div>
+              <label>Nº de Celular / Tablet</label>
+              <input type="text" id="entNroCel" placeholder="Ej: C-014" autocomplete="off">
+            </div>
+          </div>
+
+          <label>Nº de Ring Scanner</label>
+          <input type="text" id="entNroRing" placeholder="Ej: RS-032" autocomplete="off">
+
+          <label>Observación</label>
+          <textarea id="entObs" placeholder="En blanco si no hay novedades"></textarea>
+
+          <div class="btn-row">
+            <button class="btn block" id="btnConfirmarEntrega">Confirmar entrega (OK)</button>
+          </div>
+          <p class="sub" style="margin-top:12px;">Completá el número de celular/tablet, el de ring scanner, o ambos si el operario recibe los dos equipos.</p>
+        </div>
+
+        <!-- DEVOLUCION -->
+        <div id="panelDevolucion" style="display:none;">
+          <label>Nº de legajo del operario</label>
+          <input type="text" id="devLegajo" placeholder="Ej: 1042" inputmode="numeric" autocomplete="off">
+          <div id="devMovBox"></div>
+          <div class="btn-row" id="devBtnRow" style="display:none;">
+            <button class="btn block" id="btnConfirmarDevolucion">Confirmar devolución (OK)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Historial de movimientos</h3>
+        <div class="toolbar">
+          <input type="text" id="histBuscar" placeholder="Buscar por legajo, apellido o marca..." class="grow">
+          <select id="histFiltroEstado">
+            <option value="">Todos los estados</option>
+            <option value="abierto">En uso (abierto)</option>
+            <option value="OK">Devuelto OK</option>
+            <option value="Dañado">Dañado</option>
+            <option value="Extraviado">Extraviado</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Dispositivo</th><th>Operario</th><th>Entrega</th><th>Devolución</th><th>Estado</th></tr>
+            </thead>
+            <tbody id="histTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VISTA DISPOSITIVOS -->
+  <section class="view" id="view-dispositivos">
+    <div class="grid cols-2">
+      <div class="card">
+        <h2 id="devFormTitle">Cargar nuevo dispositivo</h2>
+        <p class="sub">Los campos de fecha admiten valores aproximados para equipos antiguos sin registro de ingreso real.</p>
+        <input type="hidden" id="devId">
+        <div class="two-col-form">
+          <div>
+            <label>Tipo</label>
+            <select id="devTipo">
+              <option value="Celular">Celular</option>
+              <option value="RING SCANNER">RING SCANNER</option>
+              <option value="Tablet">Tablet</option>
+            </select>
+          </div>
+          <div>
+            <label>Número identificador</label>
+            <input type="text" id="devNumero" placeholder="Ej: C-014 / RS-032">
+          </div>
+        </div>
+        <div class="two-col-form">
+          <div>
+            <label>Marca / Modelo (opcional)</label>
+            <input type="text" id="devMarca" placeholder="Ej: Motorola G22">
+          </div>
+          <div>
+            <label>Fecha de ingreso</label>
+            <input type="date" id="devFechaIngreso">
+          </div>
+        </div>
+        <label>Fecha de egreso (baja, opcional)</label>
+        <input type="date" id="devFechaEgreso">
+        <label>Observación</label>
+        <textarea id="devObsForm" placeholder="Estado general, accesorios, etc."></textarea>
+        <div class="btn-row">
+          <button class="btn" id="btnGuardarDevice">Guardar dispositivo</button>
+          <button class="btn secondary" id="btnCancelarDevice" style="display:none;">Cancelar edición</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Inventario de dispositivos <span class="badge-count" id="devCount">0</span></h3>
+        <div class="toolbar">
+          <input type="text" id="devBuscar" placeholder="Buscar por marca..." class="grow">
+          <select id="devFiltroTipo">
+            <option value="">Todos los tipos</option>
+            <option value="Celular">Celular</option>
+            <option value="RING SCANNER">RING SCANNER</option>
+            <option value="Tablet">Tablet</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tipo</th><th>Número</th><th>Marca</th><th>Ingreso</th><th>Estado</th><th></th></tr></thead>
+            <tbody id="devTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VISTA PERSONAL -->
+  <section class="view" id="view-personal">
+    <div class="card" style="margin-bottom:18px;">
+      <h2>Importar legajos desde CSV</h2>
+      <p class="sub">El archivo debe tener las columnas <strong>Nro Legajo</strong> y <strong>Nombre</strong> (formato "Legajos.csv"). Si un legajo ya existe se actualiza el nombre; si es nuevo, se agrega. Los legajos que no figuren en el archivo no se eliminan.</p>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn secondary" id="btnImportarLegajosCsv">Importar Legajos.csv</button>
+        <input type="file" id="legajosCsvFile" class="file-input-hidden" accept=".csv,text/csv">
+      </div>
+    </div>
+    <div class="grid cols-2">
+      <div class="card">
+        <h2 id="perFormTitle">Cargar ficha de personal (manual)</h2>
+        <input type="hidden" id="perOrigLegajo">
+        <label>Nº de legajo</label>
+        <input type="text" id="perLegajo" placeholder="Ej: 1042" inputmode="numeric">
+        <label>Apellido</label>
+        <input type="text" id="perApellido" placeholder="Ej: Gómez">
+        <label>Nombre</label>
+        <input type="text" id="perNombre" placeholder="Ej: Marcos">
+        <div class="btn-row">
+          <button class="btn" id="btnGuardarPersonal">Guardar ficha</button>
+          <button class="btn secondary" id="btnCancelarPersonal" style="display:none;">Cancelar edición</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Personal registrado <span class="badge-count" id="perCount">0</span></h3>
+        <div class="toolbar">
+          <input type="text" id="perBuscar" placeholder="Buscar por legajo o apellido..." class="grow">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Legajo</th><th>Apellido</th><th>Nombre</th><th></th></tr></thead>
+            <tbody id="perTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VISTA INVENTARIO -->
+  <section class="view" id="view-inventario">
+    <div class="grid cols-2">
+      <div class="card">
+        <h2>Nueva auditoría de stock</h2>
+        <p class="sub">Genera un checklist con los dispositivos que están actualmente bajo custodia del guardia (en depósito, no entregados). Marcá cada uno como presente o faltante durante el control físico.</p>
+        <label>Realizado por (opcional)</label>
+        <input type="text" id="auditRealizadoPor" placeholder="Nombre del guardia">
+        <div class="btn-row">
+          <button class="btn" id="btnIniciarAuditoria">Generar checklist</button>
+        </div>
+        <div id="auditChecklistBox" style="margin-top:16px;"></div>
+      </div>
+      <div class="card">
+        <h3>Historial de auditorías <span class="badge-count" id="auditCount">0</span></h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Fecha</th><th>Realizado por</th><th>Total</th><th>Conformes</th><th>Faltantes</th><th></th></tr></thead>
+            <tbody id="auditTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VISTA ALARMAS -->
+  <section class="view" id="view-alarmas">
+    <div class="card">
+      <h2>Dispositivos sin devolver hace más de 12 horas</h2>
+      <p class="sub">Esta lista se actualiza sola. Si un operario figura acá, todavía no devolvió el dispositivo que retiró.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Legajo</th><th>Operario</th><th>Dispositivo</th><th>Retirado</th><th>Horas transcurridas</th><th>Obs. entrega</th></tr></thead>
+          <tbody id="alarmasTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- VISTA DASHBOARD -->
+  <section class="view" id="view-dashboard">
+    <div class="grid cols-4" style="margin-bottom:18px;">
+      <div class="card stat"><span class="num" id="statDispositivos">0</span><span class="lbl">Dispositivos totales</span></div>
+      <div class="card stat"><span class="num" id="statEnUso">0</span><span class="lbl">En uso ahora</span></div>
+      <div class="card stat"><span class="num" id="statMovimientosMes">0</span><span class="lbl">Movimientos este mes</span></div>
+      <div class="card stat"><span class="num" id="statAlertas">0</span><span class="lbl">Alertas activas</span></div>
+    </div>
+    <div class="grid cols-2" style="margin-bottom:18px;">
+      <div class="card">
+        <h3>Uso por tipo de dispositivo</h3>
+        <div class="chart-box"><canvas id="chartTipo"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Operarios con más movimientos</h3>
+        <div class="chart-box"><canvas id="chartOperarios"></canvas></div>
+      </div>
+    </div>
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>Flujo de movimientos (últimos 30 días)</h3>
+        <div class="chart-box"><canvas id="chartFlujo"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Alertas — dispositivos con observaciones</h3>
+        <div class="table-wrap" style="max-height:230px;">
+          <table>
+            <thead><tr><th>Dispositivo</th><th>Motivo</th><th>Detalle</th></tr></thead>
+            <tbody id="alertTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VISTA REPORTES -->
+  <section class="view" id="view-reportes">
+    <div class="card">
+      <h2>Reporte de uso</h2>
+      <p class="sub">Generá un reporte mensual o anual con el detalle de uso de cada dispositivo y los operarios que lo manipularon.</p>
+      <div class="toolbar">
+        <select id="repModo">
+          <option value="mensual">Mensual</option>
+          <option value="anual">Anual</option>
+        </select>
+        <select id="repMes"></select>
+        <select id="repAnio"></select>
+        <button class="btn secondary" id="btnGenerarReporte">Generar reporte</button>
+        <button class="btn ghost" id="btnExportCSV">Exportar CSV</button>
+      </div>
+      <div id="repResumen" class="grid cols-3" style="margin-bottom:16px;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Dispositivo</th><th>Tipo</th><th>Legajo</th><th>Operario</th><th>Entrega</th><th>Devolución</th><th>Estado</th><th>Obs.</th></tr>
+          </thead>
+          <tbody id="repTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitle">Confirmar</h3>
+    <p id="modalText"></p>
+    <div class="btn-row">
+      <button class="btn danger" id="modalConfirm">Eliminar</button>
+      <button class="btn secondary" id="modalCancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="auditDetailOverlay">
+  <div class="modal" style="max-width:560px;">
+    <h3>Detalle de auditoría</h3>
+    <div id="auditDetailBody"></div>
+    <div class="btn-row">
+      <button class="btn secondary" id="auditDetailClose">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<footer class="hint">Los datos se guardan en este navegador (localStorage). Usá "Exportar" periódicamente para respaldar la información.</footer>
+
+<script>
+/* ============ ESTADO Y PERSISTENCIA ============ */
+const DB_KEY = 'gestorHerramientasDB_v1';
+let db = cargarDB();
+
+function dbVacia(){
+  return { devices:[], personal:[], movimientos:[], auditorias:[], seq:{device:1, mov:1, auditoria:1} };
+}
+function cargarDB(){
+  try{
+    const raw = localStorage.getItem(DB_KEY);
+    if(!raw) return dbVacia();
+    const parsed = JSON.parse(raw);
+    const base = dbVacia();
+    const merged = Object.assign(base, parsed);
+    merged.seq = Object.assign(base.seq, parsed.seq||{});
+    merged.auditorias = parsed.auditorias || [];
+    return merged;
+  }catch(e){ return dbVacia(); }
+}
+function guardarDB(){
+  localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
+
+/* ============ UTILIDADES ============ */
+function nowISODate(){ return new Date().toISOString().slice(0,10); }
+function nowTime(){ const d=new Date(); return d.toTimeString().slice(0,5); }
+function fmtFecha(f){ if(!f) return '—'; const [y,m,d]=f.split('-'); return `${d}/${m}/${y}`; }
+function fullName(p){ if(!p) return ''; return p.nombre ? `${p.apellido}, ${p.nombre}` : p.apellido; }
+function findPersonal(legajo){ return db.personal.find(p => String(p.legajo)===String(legajo)); }
+function findDevice(id){ return db.devices.find(d => d.id===id); }
+function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ============ TEMA ============ */
+function initTheme(){
+  const theme = localStorage.getItem('gh_theme') || 'light';
+  const accent = localStorage.getItem('gh_accent') || 'azul';
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.setAttribute('data-accent', accent);
+  document.getElementById('themeToggle').textContent = theme==='dark' ? '☀' : '🌙';
+  document.querySelectorAll('.swatch').forEach(s=>{
+    s.classList.toggle('active', s.dataset.c===accent);
+  });
+}
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur==='dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('gh_theme', next);
+  document.getElementById('themeToggle').textContent = next==='dark' ? '☀' : '🌙';
+  refreshCharts();
+});
+document.getElementById('swatchGroup').addEventListener('click', (e)=>{
+  const sw = e.target.closest('.swatch');
+  if(!sw) return;
+  document.documentElement.setAttribute('data-accent', sw.dataset.c);
+  localStorage.setItem('gh_accent', sw.dataset.c);
+  document.querySelectorAll('.swatch').forEach(s=>s.classList.toggle('active', s===sw));
+  refreshCharts();
+});
+
+/* ============ NAVEGACION DE TABS ============ */
+document.getElementById('tabsNav').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-view]');
+  if(!btn) return;
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+btn.dataset.view).classList.add('active');
+  if(btn.dataset.view==='dashboard') renderDashboard();
+  if(btn.dataset.view==='reportes') { poblarSelectoresReporte(); }
+  if(btn.dataset.view==='inventario') renderHistorialAuditorias();
+  if(btn.dataset.view==='alarmas') renderAlarmas();
+});
+
+/* ============ MODAL DE CONFIRMACION ============ */
+let modalCallback = null;
+function pedirConfirmacion(titulo, texto, callback){
+  document.getElementById('modalTitle').textContent = titulo;
+  document.getElementById('modalText').textContent = texto;
+  modalCallback = callback;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+document.getElementById('modalConfirm').addEventListener('click', ()=>{
+  document.getElementById('modalOverlay').classList.remove('active');
+  if(modalCallback) modalCallback();
+  modalCallback = null;
+});
+document.getElementById('modalCancel').addEventListener('click', ()=>{
+  document.getElementById('modalOverlay').classList.remove('active');
+  modalCallback = null;
+});
+
+/* ============ MOVIMIENTOS: ENTREGA ============ */
+document.getElementById('tabEntrega').addEventListener('click', ()=>{
+  document.getElementById('tabEntrega').classList.add('active');
+  document.getElementById('tabDevolucion').classList.remove('active');
+  document.getElementById('panelEntrega').style.display='';
+  document.getElementById('panelDevolucion').style.display='none';
+  document.getElementById('entLegajo').focus();
+});
+document.getElementById('tabDevolucion').addEventListener('click', ()=>{
+  document.getElementById('tabDevolucion').classList.add('active');
+  document.getElementById('tabEntrega').classList.remove('active');
+  document.getElementById('panelDevolucion').style.display='';
+  document.getElementById('panelEntrega').style.display='none';
+  document.getElementById('devLegajo').focus();
+});
+
+function deviceLabel(d){
+  if(!d) return '—';
+  return `${d.tipo} #${d.numero}` + (d.marca ? ' — ' + d.marca : '');
+}
+
+// Busca un dispositivo por tipo+numero; si no existe, lo crea automáticamente (alta rápida)
+function buscarOCrearDispositivo(tipo, numero){
+  let device = db.devices.find(d => d.tipo===tipo && String(d.numero).toLowerCase()===String(numero).toLowerCase());
+  if(!device){
+    device = {
+      id: db.seq.device++, tipo, numero, marca:'', fechaIngreso: nowISODate(), fechaEgreso: null,
+      observacion: 'Alta automática desde Entregar dispositivo — completar marca si corresponde.',
+      estado: 'disponible'
+    };
+    db.devices.push(device);
+  }
+  return device;
+}
+
+document.getElementById('entLegajo').addEventListener('input', ()=>{
+  const legajo = document.getElementById('entLegajo').value.trim();
+  const box = document.getElementById('entOperarioBox');
+  if(!legajo){ box.innerHTML=''; return; }
+  const p = findPersonal(legajo);
+  if(p){
+    box.innerHTML = `<div class="op-card"><div><div class="name">${escapeHtml(fullName(p))}</div><div class="legajo">Legajo #${escapeHtml(p.legajo)}</div></div><span class="pill ok">Verificado</span></div>`;
+  }else{
+    box.innerHTML = `<div class="op-card notfound">⚠ Legajo no encontrado. Cargalo en la pestaña "Personal" (manual o por CSV).</div>`;
+  }
+});
+
+document.getElementById('btnConfirmarEntrega').addEventListener('click', ()=>{
+  const legajo = document.getElementById('entLegajo').value.trim();
+  const tipoCel = document.getElementById('entTipoCel').value;
+  const nroCel = document.getElementById('entNroCel').value.trim();
+  const nroRing = document.getElementById('entNroRing').value.trim();
+  const obs = document.getElementById('entObs').value.trim();
+
+  if(!legajo){ alert('Ingresá el número de legajo del operario.'); document.getElementById('entLegajo').focus(); return; }
+  const persona = findPersonal(legajo);
+  if(!persona){ alert('El legajo no está registrado. Cargalo en la pestaña "Personal" antes de continuar.'); return; }
+  if(!nroCel && !nroRing){ alert('Ingresá al menos un número de dispositivo (celular/tablet o ring scanner).'); return; }
+
+  // Validar disponibilidad ANTES de registrar nada (operación atómica)
+  const pendientes = [];
+  if(nroCel) pendientes.push({tipo: tipoCel, numero: nroCel});
+  if(nroRing) pendientes.push({tipo: 'RING SCANNER', numero: nroRing});
+
+  for(const pend of pendientes){
+    const existente = db.devices.find(d => d.tipo===pend.tipo && String(d.numero).toLowerCase()===String(pend.numero).toLowerCase());
+    if(existente && existente.estado!=='disponible'){
+      alert(`El ${pend.tipo} Nº ${pend.numero} ya figura como "${existente.estado}" y no está disponible para entregar.`);
+      return;
+    }
+  }
+
+  const fecha = nowISODate(), hora = nowTime();
+  const entregados = [];
+  pendientes.forEach(pend=>{
+    const device = buscarOCrearDispositivo(pend.tipo, pend.numero);
+    const mov = {
+      id: db.seq.mov++, deviceId: device.id, legajo: persona.legajo,
+      fechaEntrega: fecha, horaEntrega: hora, obsEntrega: obs,
+      fechaDevolucion: null, horaDevolucion: null, estadoDevolucion: null, obsDevolucion: '', cerrado: false
+    };
+    db.movimientos.push(mov);
+    device.estado = 'en_uso';
+    entregados.push(device);
+  });
+  guardarDB();
+
+  document.getElementById('entLegajo').value='';
+  document.getElementById('entNroCel').value='';
+  document.getElementById('entNroRing').value='';
+  document.getElementById('entTipoCel').value='Celular';
+  document.getElementById('entObs').value='';
+  document.getElementById('entOperarioBox').innerHTML='';
+  renderHistorial();
+  renderDispositivos();
+  document.getElementById('entLegajo').focus();
+  alert(`Entrega registrada para ${fullName(persona)}: ${entregados.map(deviceLabel).join(' + ')}.`);
+});
+
+/* ============ MOVIMIENTOS: DEVOLUCION ============ */
+document.getElementById('devLegajo').addEventListener('input', renderPanelDevolucion);
+function renderPanelDevolucion(){
+  const legajo = document.getElementById('devLegajo').value.trim();
+  const box = document.getElementById('devMovBox');
+  const btnRow = document.getElementById('devBtnRow');
+  btnRow.style.display='none';
+  if(!legajo){ box.innerHTML=''; return; }
+  const persona = findPersonal(legajo);
+  if(!persona){
+    box.innerHTML = `<div class="op-card notfound">⚠ Legajo no encontrado.</div>`;
+    return;
+  }
+  const abiertos = db.movimientos.filter(m => String(m.legajo)===String(legajo) && !m.cerrado).sort((a,b)=>b.id-a.id);
+  if(abiertos.length===0){
+    box.innerHTML = `<div class="op-card warn-box"><div><div class="name">${escapeHtml(fullName(persona))}</div><div class="legajo">Legajo #${escapeHtml(persona.legajo)}</div></div><span class="pill warn">Sin dispositivos en uso</span></div>`;
+    return;
+  }
+  let html = `<div class="op-card"><div><div class="name">${escapeHtml(fullName(persona))}</div><div class="legajo">Legajo #${escapeHtml(persona.legajo)}</div></div><span class="pill bad">Devolución pendiente</span></div>`;
+  abiertos.forEach(m=>{
+    const device = findDevice(m.deviceId);
+    html += `
+    <div class="op-card" style="display:block;" data-devrow="${m.id}">
+      <div style="margin-bottom:8px;">
+        <div class="name">${escapeHtml(deviceLabel(device))}</div>
+        <div class="legajo">Entregado ${fmtFecha(m.fechaEntrega)} ${m.horaEntrega}hs${m.obsEntrega? ' · Obs. entrega: '+escapeHtml(m.obsEntrega):''}</div>
+      </div>
+      <label style="margin-top:0;">Estado del dispositivo (revisión física)</label>
+      <select class="devEstadoRow" data-mov="${m.id}">
+        <option value="OK" selected>OK</option>
+        <option value="Dañado">Dañado</option>
+        <option value="Extraviado">Extraviado</option>
+      </select>
+      <label>Observación</label>
+      <textarea class="devObsRow" data-mov="${m.id}" placeholder="Motivo, en caso de daño o extravío"></textarea>
+    </div>`;
+  });
+  box.innerHTML = html;
+  btnRow.style.display='';
+}
+
+document.getElementById('btnConfirmarDevolucion').addEventListener('click', ()=>{
+  const legajo = document.getElementById('devLegajo').value.trim();
+  const abiertos = db.movimientos.filter(m => String(m.legajo)===String(legajo) && !m.cerrado);
+  if(abiertos.length===0){ alert('No hay movimientos abiertos para este legajo.'); return; }
+
+  let faltaObs = false;
+  abiertos.forEach(m=>{
+    const estado = document.querySelector(`.devEstadoRow[data-mov="${m.id}"]`).value;
+    if(estado!=='OK' && !document.querySelector(`.devObsRow[data-mov="${m.id}"]`).value.trim()) faltaObs = true;
+  });
+  if(faltaObs && !confirm('Hay un dispositivo marcado como no-OK sin observación cargada. ¿Confirmar igual?')) return;
+
+  const fecha = nowISODate(), hora = nowTime();
+  const resumen = [];
+  abiertos.forEach(m=>{
+    const estado = document.querySelector(`.devEstadoRow[data-mov="${m.id}"]`).value;
+    const obs = document.querySelector(`.devObsRow[data-mov="${m.id}"]`).value.trim();
+    m.fechaDevolucion = fecha; m.horaDevolucion = hora; m.estadoDevolucion = estado; m.obsDevolucion = obs; m.cerrado = true;
+    const device = findDevice(m.deviceId);
+    if(device){
+      device.estado = estado==='OK' ? 'disponible' : (estado==='Dañado' ? 'dañado' : 'extraviado');
+      if(estado!=='OK') device.observacion = (device.observacion? device.observacion+' | ':'') + `[${fmtFecha(fecha)}] ${estado}: ${obs}`;
+      resumen.push(deviceLabel(device)+' → '+estado);
+    }
+  });
+  guardarDB();
+
+  document.getElementById('devLegajo').value='';
+  document.getElementById('devMovBox').innerHTML='';
+  document.getElementById('devBtnRow').style.display='none';
+  document.getElementById('devLegajo').focus();
+  renderHistorial();
+  renderDispositivos();
+  alert('Devolución registrada:\n'+resumen.join('\n'));
+});
+
+/* ============ HISTORIAL ============ */
+function renderHistorial(){
+  const buscar = (document.getElementById('histBuscar').value||'').toLowerCase();
+  const filtro = document.getElementById('histFiltroEstado').value;
+  const tbody = document.getElementById('histTbody');
+  let rows = [...db.movimientos].sort((a,b)=>b.id-a.id);
+
+  rows = rows.filter(m=>{
+    const device = findDevice(m.deviceId);
+    const persona = findPersonal(m.legajo);
+    const texto = `${persona?fullName(persona):''} ${m.legajo} ${device?device.marca:''} ${device?device.numero:''}`.toLowerCase();
+    if(buscar && !texto.includes(buscar)) return false;
+    if(filtro==='abierto' && m.cerrado) return false;
+    if(filtro==='OK' && m.estadoDevolucion!=='OK') return false;
+    if(filtro==='Dañado' && m.estadoDevolucion!=='Dañado') return false;
+    if(filtro==='Extraviado' && m.estadoDevolucion!=='Extraviado') return false;
+    return true;
+  });
+
+  if(rows.length===0){
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><span>📋</span>No hay movimientos que coincidan con la búsqueda.</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(m=>{
+    const device = findDevice(m.deviceId);
+    const persona = findPersonal(m.legajo);
+    const alerta = m.estadoDevolucion==='Dañado' || m.estadoDevolucion==='Extraviado';
+    let estadoPill = `<span class="pill neutral">En uso</span>`;
+    if(m.cerrado){
+      if(m.estadoDevolucion==='OK') estadoPill = `<span class="pill ok">Devuelto OK</span>`;
+      else estadoPill = `<span class="pill bad">${m.estadoDevolucion}</span>`;
+    }
+    return `<tr class="${alerta?'row-alert':''}">
+      <td>${escapeHtml(deviceLabel(device))}</td>
+      <td>${persona? escapeHtml(fullName(persona)) : m.legajo} <span style="color:var(--text-muted)">#${escapeHtml(String(m.legajo))}</span></td>
+      <td>${fmtFecha(m.fechaEntrega)} ${m.horaEntrega}</td>
+      <td>${m.fechaDevolucion? fmtFecha(m.fechaDevolucion)+' '+m.horaDevolucion : '—'}</td>
+      <td>${estadoPill}</td>
+    </tr>`;
+  }).join('');
+}
+document.getElementById('histBuscar').addEventListener('input', renderHistorial);
+document.getElementById('histFiltroEstado').addEventListener('change', renderHistorial);
+
+/* ============ DISPOSITIVOS (ABM) ============ */
+function limpiarFormDevice(){
+  document.getElementById('devId').value='';
+  document.getElementById('devTipo').value='Celular';
+  document.getElementById('devNumero').value='';
+  document.getElementById('devMarca').value='';
+  document.getElementById('devFechaIngreso').value='';
+  document.getElementById('devFechaEgreso').value='';
+  document.getElementById('devObsForm').value='';
+  document.getElementById('devFormTitle').textContent='Cargar nuevo dispositivo';
+  document.getElementById('btnCancelarDevice').style.display='none';
+}
+document.getElementById('btnCancelarDevice').addEventListener('click', limpiarFormDevice);
+
+document.getElementById('btnGuardarDevice').addEventListener('click', ()=>{
+  const id = document.getElementById('devId').value;
+  const tipo = document.getElementById('devTipo').value;
+  const numero = document.getElementById('devNumero').value.trim();
+  const marca = document.getElementById('devMarca').value.trim();
+  const fechaIngreso = document.getElementById('devFechaIngreso').value;
+  const fechaEgreso = document.getElementById('devFechaEgreso').value;
+  const obs = document.getElementById('devObsForm').value.trim();
+
+  if(!numero){ alert('Ingresá el número identificador del dispositivo.'); return; }
+  if(!fechaIngreso){ alert('Ingresá una fecha de ingreso (puede ser aproximada si es un equipo antiguo).'); return; }
+
+  const duplicado = db.devices.find(d => d.tipo===tipo && String(d.numero).toLowerCase()===numero.toLowerCase() && String(d.id)!==String(id));
+  if(duplicado){ alert(`Ya existe un ${tipo} con el número ${numero}.`); return; }
+
+  if(id){
+    const device = findDevice(Number(id));
+    if(device){
+      device.tipo=tipo; device.numero=numero; device.marca=marca; device.fechaIngreso=fechaIngreso;
+      device.fechaEgreso=fechaEgreso||null; device.observacion=obs;
+    }
+  }else{
+    db.devices.push({
+      id: db.seq.device++, tipo, numero, marca, fechaIngreso, fechaEgreso: fechaEgreso||null,
+      observacion: obs, estado: 'disponible'
+    });
+  }
+  guardarDB();
+  limpiarFormDevice();
+  renderDispositivos();
+});
+
+function renderDispositivos(){
+  const buscar = (document.getElementById('devBuscar').value||'').toLowerCase();
+  const filtroTipo = document.getElementById('devFiltroTipo').value;
+  let list = [...db.devices].sort((a,b)=>b.id-a.id);
+  list = list.filter(d=>{
+    if(filtroTipo && d.tipo!==filtroTipo) return false;
+    if(buscar && !`${d.numero||''} ${d.marca||''}`.toLowerCase().includes(buscar)) return false;
+    return true;
+  });
+  document.getElementById('devCount').textContent = db.devices.length;
+  const tbody = document.getElementById('devTbody');
+  if(list.length===0){
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><span>📦</span>No hay dispositivos cargados todavía.</div></td></tr>`;
+    return;
+  }
+  const estadoPillMap = {
+    disponible: '<span class="pill ok">Disponible</span>',
+    en_uso: '<span class="pill neutral">En uso</span>',
+    'dañado': '<span class="pill bad">Dañado</span>',
+    extraviado: '<span class="pill bad">Extraviado</span>'
+  };
+  tbody.innerHTML = list.map(d=>`
+    <tr>
+      <td>${escapeHtml(d.tipo)}</td>
+      <td>${escapeHtml(d.numero||'—')}</td>
+      <td>${escapeHtml(d.marca||'—')}</td>
+      <td>${fmtFecha(d.fechaIngreso)}</td>
+      <td>${estadoPillMap[d.estado]||d.estado}</td>
+      <td style="text-align:right; white-space:nowrap;">
+        <button class="icon-action edit" data-edit="${d.id}" title="Editar">✎</button>
+        <button class="icon-action" data-del="${d.id}" title="Eliminar">🗑</button>
+      </td>
+    </tr>`).join('');
+}
+document.getElementById('devBuscar').addEventListener('input', renderDispositivos);
+document.getElementById('devFiltroTipo').addEventListener('change', renderDispositivos);
+document.getElementById('devTbody').addEventListener('click', (e)=>{
+  const editId = e.target.closest('[data-edit]');
+  const delId = e.target.closest('[data-del]');
+  if(editId){
+    const d = findDevice(Number(editId.dataset.edit));
+    if(!d) return;
+    document.getElementById('devId').value = d.id;
+    document.getElementById('devTipo').value = d.tipo;
+    document.getElementById('devNumero').value = d.numero||'';
+    document.getElementById('devMarca').value = d.marca||'';
+    document.getElementById('devFechaIngreso').value = d.fechaIngreso||'';
+    document.getElementById('devFechaEgreso').value = d.fechaEgreso||'';
+    document.getElementById('devObsForm').value = d.observacion||'';
+    document.getElementById('devFormTitle').textContent = 'Editar dispositivo #'+d.id;
+    document.getElementById('btnCancelarDevice').style.display='';
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+  if(delId){
+    const id = Number(delId.dataset.del);
+    pedirConfirmacion('Eliminar dispositivo', '¿Seguro que querés eliminar este dispositivo? Esta acción no se puede deshacer.', ()=>{
+      db.devices = db.devices.filter(d=>d.id!==id);
+      guardarDB();
+      renderDispositivos();
+    });
+  }
+});
+
+/* ============ PERSONAL (ABM) ============ */
+function limpiarFormPersonal(){
+  document.getElementById('perOrigLegajo').value='';
+  document.getElementById('perLegajo').value='';
+  document.getElementById('perApellido').value='';
+  document.getElementById('perNombre').value='';
+  document.getElementById('perFormTitle').textContent='Cargar ficha de personal';
+  document.getElementById('btnCancelarPersonal').style.display='none';
+}
+document.getElementById('btnCancelarPersonal').addEventListener('click', limpiarFormPersonal);
+
+document.getElementById('btnGuardarPersonal').addEventListener('click', ()=>{
+  const orig = document.getElementById('perOrigLegajo').value;
+  const legajo = document.getElementById('perLegajo').value.trim();
+  const apellido = document.getElementById('perApellido').value.trim();
+  const nombre = document.getElementById('perNombre').value.trim();
+  if(!legajo || !apellido || !nombre){ alert('Completá legajo, apellido y nombre.'); return; }
+
+  if(orig){
+    const p = findPersonal(orig);
+    if(p){ p.legajo=legajo; p.apellido=apellido; p.nombre=nombre; }
+  }else{
+    if(findPersonal(legajo)){ alert('Ya existe una ficha con ese número de legajo.'); return; }
+    db.personal.push({legajo, apellido, nombre});
+  }
+  guardarDB();
+  limpiarFormPersonal();
+  renderPersonal();
+});
+
+function renderPersonal(){
+  const buscar = (document.getElementById('perBuscar').value||'').toLowerCase();
+  let list = [...db.personal].sort((a,b)=>a.apellido.localeCompare(b.apellido));
+  list = list.filter(p => !buscar || `${p.legajo} ${p.apellido}`.toLowerCase().includes(buscar));
+  document.getElementById('perCount').textContent = db.personal.length;
+  const tbody = document.getElementById('perTbody');
+  if(list.length===0){
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><span>🧑‍💼</span>No hay personal cargado todavía.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(p=>`
+    <tr>
+      <td>#${escapeHtml(p.legajo)}</td>
+      <td>${escapeHtml(p.apellido)}</td>
+      <td>${escapeHtml(p.nombre)}</td>
+      <td style="text-align:right; white-space:nowrap;">
+        <button class="icon-action edit" data-editp="${p.legajo}" title="Editar">✎</button>
+        <button class="icon-action" data-delp="${p.legajo}" title="Eliminar">🗑</button>
+      </td>
+    </tr>`).join('');
+}
+document.getElementById('perBuscar').addEventListener('input', renderPersonal);
+document.getElementById('perTbody').addEventListener('click', (e)=>{
+  const editL = e.target.closest('[data-editp]');
+  const delL = e.target.closest('[data-delp]');
+  if(editL){
+    const p = findPersonal(editL.dataset.editp);
+    if(!p) return;
+    document.getElementById('perOrigLegajo').value = p.legajo;
+    document.getElementById('perLegajo').value = p.legajo;
+    document.getElementById('perApellido').value = p.apellido;
+    document.getElementById('perNombre').value = p.nombre;
+    document.getElementById('perFormTitle').textContent = 'Editar ficha #'+p.legajo;
+    document.getElementById('btnCancelarPersonal').style.display='';
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+  if(delL){
+    const legajo = delL.dataset.delp;
+    pedirConfirmacion('Eliminar ficha', '¿Seguro que querés eliminar esta ficha de personal?', ()=>{
+      db.personal = db.personal.filter(p=>String(p.legajo)!==String(legajo));
+      guardarDB();
+      renderPersonal();
+    });
+  }
+});
+
+/* ============ DASHBOARD ============ */
+let charts = {};
+function renderDashboard(){
+  document.getElementById('statDispositivos').textContent = db.devices.length;
+  document.getElementById('statEnUso').textContent = db.devices.filter(d=>d.estado==='en_uso').length;
+
+  const hoy = new Date();
+  const movMes = db.movimientos.filter(m=>{
+    const f = new Date(m.fechaEntrega);
+    return f.getMonth()===hoy.getMonth() && f.getFullYear()===hoy.getFullYear();
+  });
+  document.getElementById('statMovimientosMes').textContent = movMes.length;
+
+  const alertas = db.devices.filter(d=>d.estado==='dañado'||d.estado==='extraviado');
+  document.getElementById('statAlertas').textContent = alertas.length;
+
+  // tabla alertas
+  const alertBody = document.getElementById('alertTbody');
+  if(alertas.length===0){
+    alertBody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><span>✅</span>No hay alertas activas.</div></td></tr>`;
+  }else{
+    alertBody.innerHTML = alertas.map(d=>`
+      <tr class="row-alert">
+        <td>${escapeHtml(deviceLabel(d))}</td>
+        <td><span class="pill bad">${d.estado==='dañado'?'Dañado':'Extraviado'}</span></td>
+        <td>${escapeHtml(d.observacion||'—')}</td>
+      </tr>`).join('');
+  }
+
+  renderCharts();
+}
+
+function chartColors(){
+  const styles = getComputedStyle(document.documentElement);
+  return {
+    accent: styles.getPropertyValue('--accent').trim(),
+    text: styles.getPropertyValue('--text-muted').trim(),
+    grid: styles.getPropertyValue('--border').trim()
+  };
+}
+
+function renderCharts(){
+  const c = chartColors();
+  Chart.defaults.color = c.text;
+  Chart.defaults.borderColor = c.grid;
+  Chart.defaults.font.family = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
+
+  // Chart 1: por tipo
+  const tipos = ['Celular','RING SCANNER','Tablet'];
+  const countsTipo = tipos.map(t => db.movimientos.filter(m=>{
+    const dv = findDevice(m.deviceId); return dv && dv.tipo===t;
+  }).length);
+  if(charts.tipo) charts.tipo.destroy();
+  charts.tipo = new Chart(document.getElementById('chartTipo'), {
+    type:'doughnut',
+    data:{ labels:tipos, datasets:[{ data:countsTipo, backgroundColor:['#2563eb','#e8690c','#17a24a'], borderWidth:0 }]},
+    options:{ maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+  });
+
+  // Chart 2: top operarios
+  const porOperario = {};
+  db.movimientos.forEach(m=>{ porOperario[m.legajo] = (porOperario[m.legajo]||0)+1; });
+  const top = Object.entries(porOperario).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const labelsOp = top.map(([legajo])=>{ const p=findPersonal(legajo); return p? p.apellido : ('#'+legajo); });
+  const dataOp = top.map(([,n])=>n);
+  if(charts.op) charts.op.destroy();
+  charts.op = new Chart(document.getElementById('chartOperarios'), {
+    type:'bar',
+    data:{ labels: labelsOp.length?labelsOp:['Sin datos'], datasets:[{ data: dataOp.length?dataOp:[0], backgroundColor:c.accent, borderRadius:6 }]},
+    options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true, ticks:{precision:0}}} }
+  });
+
+  // Chart 3: flujo ultimos 30 dias
+  const dias = [];
+  for(let i=29;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); dias.push(d.toISOString().slice(0,10)); }
+  const dataFlujo = dias.map(f => db.movimientos.filter(m=>m.fechaEntrega===f).length);
+  if(charts.flujo) charts.flujo.destroy();
+  charts.flujo = new Chart(document.getElementById('chartFlujo'), {
+    type:'line',
+    data:{ labels: dias.map(f=>f.slice(8,10)+'/'+f.slice(5,7)), datasets:[{ data:dataFlujo, borderColor:c.accent, backgroundColor:c.accent+'33', fill:true, tension:.3, pointRadius:0 }]},
+    options:{ maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:8}}, y:{beginAtZero:true, ticks:{precision:0}}} }
+  });
+}
+function refreshCharts(){ if(document.getElementById('view-dashboard').classList.contains('active')) renderCharts(); }
+
+/* ============ REPORTES ============ */
+function poblarSelectoresReporte(){
+  const selMes = document.getElementById('repMes');
+  const selAnio = document.getElementById('repAnio');
+  if(selMes.options.length===0){
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    selMes.innerHTML = meses.map((m,i)=>`<option value="${i}">${m}</option>`).join('');
+    selMes.value = new Date().getMonth();
+  }
+  if(selAnio.options.length===0){
+    const anioActual = new Date().getFullYear();
+    let opts = '';
+    for(let y=anioActual-5; y<=anioActual+1; y++) opts += `<option value="${y}">${y}</option>`;
+    selAnio.innerHTML = opts;
+    selAnio.value = anioActual;
+  }
+}
+document.getElementById('repModo').addEventListener('change', ()=>{
+  document.getElementById('repMes').style.display = document.getElementById('repModo').value==='mensual' ? '' : 'none';
+});
+
+let ultimoReporte = [];
+document.getElementById('btnGenerarReporte').addEventListener('click', generarReporte);
+function generarReporte(){
+  const modo = document.getElementById('repModo').value;
+  const mes = Number(document.getElementById('repMes').value);
+  const anio = Number(document.getElementById('repAnio').value);
+
+  ultimoReporte = db.movimientos.filter(m=>{
+    const f = new Date(m.fechaEntrega+'T00:00:00');
+    if(f.getFullYear()!==anio) return false;
+    if(modo==='mensual' && f.getMonth()!==mes) return false;
+    return true;
+  }).sort((a,b)=>a.fechaEntrega.localeCompare(b.fechaEntrega));
+
+  const tbody = document.getElementById('repTbody');
+  if(ultimoReporte.length===0){
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><span>📄</span>No hay movimientos en el período seleccionado.</div></td></tr>`;
+  }else{
+    tbody.innerHTML = ultimoReporte.map(m=>{
+      const device = findDevice(m.deviceId);
+      const persona = findPersonal(m.legajo);
+      const alerta = m.estadoDevolucion==='Dañado' || m.estadoDevolucion==='Extraviado';
+      return `<tr class="${alerta?'row-alert':''}">
+        <td>${device?escapeHtml(device.numero||device.marca||''):'—'}</td>
+        <td>${device?escapeHtml(device.tipo):'—'}</td>
+        <td>#${escapeHtml(String(m.legajo))}</td>
+        <td>${persona?escapeHtml(fullName(persona)):'—'}</td>
+        <td>${fmtFecha(m.fechaEntrega)} ${m.horaEntrega}</td>
+        <td>${m.fechaDevolucion?fmtFecha(m.fechaDevolucion)+' '+m.horaDevolucion:'—'}</td>
+        <td>${m.cerrado ? (m.estadoDevolucion==='OK'?'<span class="pill ok">OK</span>':'<span class="pill bad">'+m.estadoDevolucion+'</span>') : '<span class="pill neutral">En uso</span>'}</td>
+        <td>${escapeHtml((m.obsEntrega||'')+(m.obsDevolucion?(' / '+m.obsDevolucion):''))}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // resumen
+  const totalMov = ultimoReporte.length;
+  const totalDanio = ultimoReporte.filter(m=>m.estadoDevolucion==='Dañado').length;
+  const totalExtravio = ultimoReporte.filter(m=>m.estadoDevolucion==='Extraviado').length;
+  const operariosUnicos = new Set(ultimoReporte.map(m=>m.legajo)).size;
+  document.getElementById('repResumen').innerHTML = `
+    <div class="card stat"><span class="num">${totalMov}</span><span class="lbl">Movimientos en el período</span></div>
+    <div class="card stat"><span class="num">${operariosUnicos}</span><span class="lbl">Operarios involucrados</span></div>
+    <div class="card stat"><span class="num">${totalDanio+totalExtravio}</span><span class="lbl">Incidencias (dañado/extraviado)</span></div>
+  `;
+}
+
+document.getElementById('btnExportCSV').addEventListener('click', ()=>{
+  if(ultimoReporte.length===0){ alert('Generá el reporte primero.'); return; }
+  const headers = ['Dispositivo','Tipo','Legajo','Operario','FechaEntrega','HoraEntrega','FechaDevolucion','HoraDevolucion','Estado','ObsEntrega','ObsDevolucion'];
+  const rows = ultimoReporte.map(m=>{
+    const device = findDevice(m.deviceId);
+    const persona = findPersonal(m.legajo);
+    return [
+      device?(device.numero||device.marca||''):'', device?device.tipo:'', m.legajo, persona?fullName(persona):'',
+      m.fechaEntrega, m.horaEntrega, m.fechaDevolucion||'', m.horaDevolucion||'',
+      m.estadoDevolucion||'En uso', m.obsEntrega||'', m.obsDevolucion||''
+    ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';');
+  });
+  const csv = [headers.join(';'), ...rows].join('\r\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `reporte_dispositivos_${document.getElementById('repAnio').value}_${document.getElementById('repModo').value}.csv`;
+  a.click();
+});
+
+/* ============ EXPORT / IMPORT BACKUP ============ */
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(db, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `backup_gestor_herramientas_${nowISODate()}.json`;
+  a.click();
+});
+document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      const data = JSON.parse(ev.target.result);
+      if(!data.devices || !data.personal || !data.movimientos){ alert('El archivo no tiene el formato esperado.'); return; }
+      pedirConfirmacion('Importar backup', 'Esto reemplazará todos los datos actuales por los del archivo importado. ¿Continuar?', ()=>{
+        db = Object.assign(dbVacia(), data);
+        guardarDB();
+        renderAll();
+        alert('Datos importados correctamente.');
+      });
+    }catch(err){ alert('No se pudo leer el archivo. Verificá que sea un backup válido en formato JSON.'); }
+  };
+  reader.readAsText(file);
+  e.target.value='';
+});
+
+/* ============ IMPORTAR LEGAJOS.CSV ============ */
+document.getElementById('btnImportarLegajosCsv').addEventListener('click', ()=> document.getElementById('legajosCsvFile').click());
+document.getElementById('legajosCsvFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      const { nuevos, actualizados } = importarLegajosCsv(ev.target.result);
+      guardarDB();
+      renderPersonal();
+      alert(`Importación de Legajos.csv completa: ${nuevos} legajo(s) nuevo(s), ${actualizados} actualizado(s).`);
+    }catch(err){
+      alert('No se pudo procesar el archivo. Verificá que sea un CSV con columnas "Nro Legajo" y "Nombre".');
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+  e.target.value='';
+});
+
+function importarLegajosCsv(texto){
+  const lineas = texto.split(/\r\n|\n|\r/).filter(l => l.trim().length>0);
+  if(lineas.length<2) throw new Error('CSV vacío');
+  const delim = lineas[0].includes(';') && !lineas[0].includes(',') ? ';' : ',';
+  const headers = lineas[0].split(delim).map(h => h.trim().toLowerCase().replace(/"/g,''));
+  const idxLegajo = headers.findIndex(h => h.includes('legajo'));
+  const idxNombre = headers.findIndex(h => h.includes('nombre'));
+  if(idxLegajo===-1 || idxNombre===-1) throw new Error('Faltan columnas requeridas');
+
+  let nuevos=0, actualizados=0;
+  for(let i=1;i<lineas.length;i++){
+    const cols = lineas[i].split(delim).map(c => c.trim().replace(/^"|"$/g,''));
+    const legajo = (cols[idxLegajo]||'').trim();
+    const nombre = (cols[idxNombre]||'').trim();
+    if(!legajo || !nombre) continue;
+    const existente = findPersonal(legajo);
+    if(existente){
+      existente.apellido = nombre;
+      actualizados++;
+    }else{
+      db.personal.push({ legajo, apellido: nombre, nombre: '' });
+      nuevos++;
+    }
+  }
+  return { nuevos, actualizados };
+}
+
+/* ============ INVENTARIO / AUDITORÍAS DE STOCK ============ */
+document.getElementById('btnIniciarAuditoria').addEventListener('click', iniciarAuditoria);
+
+function iniciarAuditoria(){
+  const devices = db.devices.filter(d=>d.estado==='disponible')
+    .sort((a,b)=> a.tipo.localeCompare(b.tipo) || String(a.numero).localeCompare(String(b.numero)));
+  const box = document.getElementById('auditChecklistBox');
+  if(devices.length===0){
+    box.innerHTML = `<div class="empty-state"><span>📭</span>No hay dispositivos bajo custodia para auditar en este momento.</div>`;
+    return;
+  }
+  let html = `<div class="table-wrap" style="max-height:360px;"><table><thead><tr><th>Presente</th><th>Dispositivo</th><th>Observación</th></tr></thead><tbody>`;
+  devices.forEach(d=>{
+    html += `<tr>
+      <td><input type="checkbox" class="auditItemChk" data-device="${d.id}" checked></td>
+      <td>${escapeHtml(deviceLabel(d))}</td>
+      <td><input type="text" class="auditItemObs" data-device="${d.id}" placeholder="Observación (opcional)"></td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>
+  <div class="btn-row"><button class="btn block" id="btnGuardarAuditoria">Guardar auditoría (conformidad)</button></div>`;
+  box.innerHTML = html;
+  document.getElementById('btnGuardarAuditoria').addEventListener('click', guardarAuditoria);
+}
+
+function guardarAuditoria(){
+  const checks = document.querySelectorAll('.auditItemChk');
+  if(checks.length===0) return;
+  const items = [];
+  checks.forEach(chk=>{
+    const deviceId = Number(chk.dataset.device);
+    const obsInput = document.querySelector(`.auditItemObs[data-device="${deviceId}"]`);
+    const presente = chk.checked;
+    const obs = obsInput ? obsInput.value.trim() : '';
+    items.push({deviceId, presente, obs});
+    const device = findDevice(deviceId);
+    if(device && !presente){
+      device.estado = 'extraviado';
+      device.observacion = (device.observacion? device.observacion+' | ':'') + `[Auditoría ${fmtFecha(nowISODate())}] No encontrado en control de stock.` + (obs? ' '+obs:'');
+    } else if(device && obs){
+      device.observacion = (device.observacion? device.observacion+' | ':'') + `[Auditoría ${fmtFecha(nowISODate())}] ${obs}`;
+    }
+  });
+
+  const auditoria = {
+    id: db.seq.auditoria++,
+    fecha: nowISODate(), hora: nowTime(),
+    realizadoPor: document.getElementById('auditRealizadoPor').value.trim(),
+    items,
+    total: items.length,
+    conformes: items.filter(i=>i.presente).length,
+    faltantes: items.filter(i=>!i.presente).length
+  };
+  db.auditorias.push(auditoria);
+  guardarDB();
+
+  document.getElementById('auditChecklistBox').innerHTML =
+    `<div class="empty-state"><span>✅</span>Auditoría guardada: ${auditoria.conformes}/${auditoria.total} conformes${auditoria.faltantes>0? ' — '+auditoria.faltantes+' faltante(s)':''}.</div>`;
+  document.getElementById('auditRealizadoPor').value='';
+  renderHistorialAuditorias();
+  renderDispositivos();
+  if(document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
+  if(auditoria.faltantes>0) alert(`Atención: ${auditoria.faltantes} dispositivo(s) no fueron encontrados y quedaron marcados como "Extraviado".`);
+}
+
+function renderHistorialAuditorias(){
+  document.getElementById('auditCount').textContent = db.auditorias.length;
+  const tbody = document.getElementById('auditTbody');
+  const list = [...db.auditorias].sort((a,b)=>b.id-a.id);
+  if(list.length===0){
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><span>🗒</span>Todavía no se registraron auditorías de stock.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(a=>`
+    <tr class="${a.faltantes>0?'row-alert':''}">
+      <td>${fmtFecha(a.fecha)} ${a.hora}</td>
+      <td>${escapeHtml(a.realizadoPor||'—')}</td>
+      <td>${a.total}</td>
+      <td>${a.conformes}</td>
+      <td>${a.faltantes}</td>
+      <td><button class="icon-action edit" data-verauditoria="${a.id}" title="Ver detalle">👁</button></td>
+    </tr>`).join('');
+}
+document.getElementById('auditTbody').addEventListener('click', (e)=>{
+  const btn = e.target.closest('[data-verauditoria]');
+  if(!btn) return;
+  const a = db.auditorias.find(x=>x.id===Number(btn.dataset.verauditoria));
+  if(a) mostrarDetalleAuditoria(a);
+});
+function mostrarDetalleAuditoria(a){
+  const body = document.getElementById('auditDetailBody');
+  let html = `<p class="sub" style="margin-bottom:10px;">${fmtFecha(a.fecha)} ${a.hora}hs · Realizado por: ${escapeHtml(a.realizadoPor||'—')}</p>`;
+  html += `<div class="table-wrap" style="max-height:320px;"><table><thead><tr><th>Dispositivo</th><th>Resultado</th><th>Observación</th></tr></thead><tbody>`;
+  a.items.forEach(it=>{
+    const device = findDevice(it.deviceId);
+    html += `<tr class="${it.presente?'':'row-alert'}">
+      <td>${device? escapeHtml(deviceLabel(device)) : ('#'+it.deviceId)}</td>
+      <td>${it.presente? '<span class="pill ok">Presente</span>' : '<span class="pill bad">Faltante</span>'}</td>
+      <td>${escapeHtml(it.obs||'—')}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+  body.innerHTML = html;
+  document.getElementById('auditDetailOverlay').classList.add('active');
+}
+document.getElementById('auditDetailClose').addEventListener('click', ()=> document.getElementById('auditDetailOverlay').classList.remove('active'));
+
+/* ============ ALARMAS ============ */
+const ALARM_HOURS = 12;
+function calcAlarmas(){
+  const now = Date.now();
+  return db.movimientos.filter(m=>!m.cerrado).map(m=>{
+    const inicio = new Date(m.fechaEntrega+'T'+m.horaEntrega+':00');
+    const horas = (now - inicio.getTime())/3600000;
+    return {mov:m, horas};
+  }).filter(x=>x.horas >= ALARM_HOURS).sort((a,b)=>b.horas-a.horas);
+}
+function renderAlarmas(){
+  const list = calcAlarmas();
+  const tbody = document.getElementById('alarmasTbody');
+  if(list.length===0){
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><span>✅</span>No hay dispositivos con más de ${ALARM_HOURS} horas sin devolver.</div></td></tr>`;
+  }else{
+    tbody.innerHTML = list.map(({mov,horas})=>{
+      const persona = findPersonal(mov.legajo);
+      const device = findDevice(mov.deviceId);
+      return `<tr class="row-alert">
+        <td>#${escapeHtml(String(mov.legajo))}</td>
+        <td>${persona? escapeHtml(fullName(persona)) : '—'}</td>
+        <td>${escapeHtml(deviceLabel(device))}</td>
+        <td>${fmtFecha(mov.fechaEntrega)} ${mov.horaEntrega}hs</td>
+        <td><strong>${horas.toFixed(1)} hs</strong></td>
+        <td>${escapeHtml(mov.obsEntrega||'—')}</td>
+      </tr>`;
+    }).join('');
+  }
+  updateAlarmBadge(list.length);
+}
+function updateAlarmBadge(count){
+  if(count===undefined) count = calcAlarmas().length;
+  const badge = document.getElementById('alarmBadge');
+  if(count>0){ badge.style.display=''; badge.textContent=count; }
+  else{ badge.style.display='none'; }
+}
+setInterval(()=>{
+  updateAlarmBadge();
+  if(document.getElementById('view-alarmas').classList.contains('active')) renderAlarmas();
+}, 60000);
+
+/* ============ INIT ============ */
+function renderAll(){
+  renderHistorial();
+  renderDispositivos();
+  renderPersonal();
+  renderHistorialAuditorias();
+  updateAlarmBadge();
+  poblarSelectoresReporte();
+  if(document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
+}
+initTheme();
+renderAll();
+</script>
+</body>
+</html>
