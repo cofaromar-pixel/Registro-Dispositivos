@@ -154,6 +154,18 @@
   .pill.bad{ background:var(--danger-bg); color:var(--danger); }
   .pill.neutral{ background:var(--bg-soft); color:var(--text-muted); }
 
+  .field-with-suggest{ position:relative; }
+  .suggest-box{
+    position:absolute; top:calc(100% + 2px); left:0; right:0; z-index:40;
+    background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm);
+    box-shadow:var(--shadow-md); max-height:220px; overflow-y:auto; display:none;
+  }
+  .suggest-box.active{ display:block; }
+  .suggest-item{ padding:8px 12px; cursor:pointer; font-size:13.5px; display:flex; justify-content:space-between; gap:10px; }
+  .suggest-item:hover, .suggest-item.hover{ background:var(--accent-light); }
+  .suggest-item .sname{ font-weight:600; }
+  .suggest-item .slegajo{ color:var(--text-muted); font-size:12px; white-space:nowrap; }
+
   .op-card{
     background:var(--bg-soft); border:1px solid var(--border); border-radius:var(--radius-sm);
     padding:12px 14px; margin-top:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
@@ -262,7 +274,10 @@
         <!-- ENTREGA -->
         <div id="panelEntrega">
           <label>Nº de legajo del operario</label>
-          <input type="text" id="entLegajo" placeholder="Ej: 1042" inputmode="numeric" autocomplete="off">
+          <div class="field-with-suggest">
+            <input type="text" id="entLegajo" placeholder="Ej: 30123456" inputmode="numeric" autocomplete="off">
+            <div class="suggest-box" id="entLegajoSuggest"></div>
+          </div>
           <div id="entOperarioBox"></div>
 
           <div class="two-col-form">
@@ -294,7 +309,10 @@
         <!-- DEVOLUCION -->
         <div id="panelDevolucion" style="display:none;">
           <label>Nº de legajo del operario</label>
-          <input type="text" id="devLegajo" placeholder="Ej: 1042" inputmode="numeric" autocomplete="off">
+          <div class="field-with-suggest">
+            <input type="text" id="devLegajo" placeholder="Ej: 30123456" inputmode="numeric" autocomplete="off">
+            <div class="suggest-box" id="devLegajoSuggest"></div>
+          </div>
           <div id="devMovBox"></div>
           <div class="btn-row" id="devBtnRow" style="display:none;">
             <button class="btn block" id="btnConfirmarDevolucion">Confirmar devolución (OK)</button>
@@ -401,11 +419,13 @@
   <section class="view" id="view-personal">
     <div class="card" style="margin-bottom:18px;">
       <h2>Importar legajos desde CSV</h2>
-      <p class="sub">El archivo debe tener las columnas <strong>Nro Legajo</strong> y <strong>Nombre</strong> (formato "Legajos.csv"). Si un legajo ya existe se actualiza el nombre; si es nuevo, se agrega. Los legajos que no figuren en el archivo no se eliminan.</p>
+      <p class="sub">El archivo debe tener las columnas <strong>Nro Legajo</strong> (DNI del operario) y <strong>Nombre</strong> (formato "Legajos.csv"). Si un legajo ya existe se actualiza el nombre; si es nuevo, se agrega. Los legajos que no figuren en el archivo no se eliminan automáticamente.</p>
       <div class="btn-row" style="margin-top:0;">
         <button class="btn secondary" id="btnImportarLegajosCsv">Importar Legajos.csv</button>
+        <button class="btn danger" id="btnLimpiarLegajos">Limpiar legajos</button>
         <input type="file" id="legajosCsvFile" class="file-input-hidden" accept=".csv,text/csv">
       </div>
+      <p class="sub" style="margin-top:10px; margin-bottom:0;">Usá "Limpiar legajos" antes de importar un archivo Legajos.csv que reemplace por completo la base actual (por ejemplo, si cambiás el criterio de numeración a DNI).</p>
     </div>
     <div class="grid cols-2">
       <div class="card">
@@ -695,13 +715,59 @@ function buscarOCrearDispositivo(tipo, numero){
 document.getElementById('entLegajo').addEventListener('input', ()=>{
   const legajo = document.getElementById('entLegajo').value.trim();
   const box = document.getElementById('entOperarioBox');
-  if(!legajo){ box.innerHTML=''; return; }
-  const p = findPersonal(legajo);
-  if(p){
-    box.innerHTML = `<div class="op-card"><div><div class="name">${escapeHtml(fullName(p))}</div><div class="legajo">Legajo #${escapeHtml(p.legajo)}</div></div><span class="pill ok">Verificado</span></div>`;
-  }else{
-    box.innerHTML = `<div class="op-card notfound">⚠ Legajo no encontrado. Cargalo en la pestaña "Personal" (manual o por CSV).</div>`;
+  if(!legajo){ box.innerHTML=''; }
+  else{
+    const p = findPersonal(legajo);
+    if(p){
+      box.innerHTML = `<div class="op-card"><div><div class="name">${escapeHtml(fullName(p))}</div><div class="legajo">Legajo #${escapeHtml(p.legajo)}</div></div><span class="pill ok">Verificado</span></div>`;
+    }else{
+      box.innerHTML = `<div class="op-card notfound">⚠ Legajo no encontrado. Cargalo en la pestaña "Personal" (manual o por CSV).</div>`;
+    }
   }
+  mostrarSugerenciasLegajo('entLegajo', 'entLegajoSuggest');
+});
+document.getElementById('entLegajo').addEventListener('blur', ()=> ocultarSugerenciasLuego('entLegajoSuggest'));
+document.getElementById('entLegajo').addEventListener('focus', ()=> mostrarSugerenciasLegajo('entLegajo', 'entLegajoSuggest'));
+
+/* Autocompletado en vivo por número de legajo/DNI: muestra coincidencias mientras se tipea */
+function mostrarSugerenciasLegajo(inputId, boxId){
+  const valor = document.getElementById(inputId).value.trim();
+  const box = document.getElementById(boxId);
+  if(!valor){ box.classList.remove('active'); box.innerHTML=''; return; }
+  const coincidencias = db.personal
+    .filter(p => String(p.legajo).includes(valor))
+    .sort((a,b)=>{
+      const aStarts = String(a.legajo).startsWith(valor) ? 0 : 1;
+      const bStarts = String(b.legajo).startsWith(valor) ? 0 : 1;
+      return aStarts - bStarts || String(a.legajo).length - String(b.legajo).length;
+    })
+    .slice(0, 8);
+  if(coincidencias.length===0 || (coincidencias.length===1 && String(coincidencias[0].legajo)===valor)){
+    box.classList.remove('active'); box.innerHTML=''; return;
+  }
+  box.innerHTML = coincidencias.map(p =>
+    `<div class="suggest-item" data-legajo="${escapeHtml(String(p.legajo))}" data-target="${inputId}">
+      <span class="sname">${escapeHtml(fullName(p))}</span><span class="slegajo">#${escapeHtml(String(p.legajo))}</span>
+    </div>`
+  ).join('');
+  box.classList.add('active');
+}
+function ocultarSugerenciasLuego(boxId){
+  setTimeout(()=>{ const box = document.getElementById(boxId); box.classList.remove('active'); box.innerHTML=''; }, 150);
+}
+document.getElementById('entLegajoSuggest').addEventListener('mousedown', (e)=>{
+  const item = e.target.closest('.suggest-item');
+  if(!item) return;
+  document.getElementById('entLegajo').value = item.dataset.legajo;
+  document.getElementById('entLegajo').dispatchEvent(new Event('input'));
+  document.getElementById('entLegajoSuggest').classList.remove('active');
+});
+document.getElementById('devLegajoSuggest').addEventListener('mousedown', (e)=>{
+  const item = e.target.closest('.suggest-item');
+  if(!item) return;
+  document.getElementById('devLegajo').value = item.dataset.legajo;
+  document.getElementById('devLegajo').dispatchEvent(new Event('input'));
+  document.getElementById('devLegajoSuggest').classList.remove('active');
 });
 
 document.getElementById('btnConfirmarEntrega').addEventListener('click', ()=>{
@@ -757,7 +823,12 @@ document.getElementById('btnConfirmarEntrega').addEventListener('click', ()=>{
 });
 
 /* ============ MOVIMIENTOS: DEVOLUCION ============ */
-document.getElementById('devLegajo').addEventListener('input', renderPanelDevolucion);
+document.getElementById('devLegajo').addEventListener('input', ()=>{
+  renderPanelDevolucion();
+  mostrarSugerenciasLegajo('devLegajo', 'devLegajoSuggest');
+});
+document.getElementById('devLegajo').addEventListener('blur', ()=> ocultarSugerenciasLuego('devLegajoSuggest'));
+document.getElementById('devLegajo').addEventListener('focus', ()=> mostrarSugerenciasLegajo('devLegajo', 'devLegajoSuggest'));
 function renderPanelDevolucion(){
   const legajo = document.getElementById('devLegajo').value.trim();
   const box = document.getElementById('devMovBox');
@@ -1267,6 +1338,15 @@ document.getElementById('importFile').addEventListener('change', (e)=>{
 
 /* ============ IMPORTAR LEGAJOS.CSV ============ */
 document.getElementById('btnImportarLegajosCsv').addEventListener('click', ()=> document.getElementById('legajosCsvFile').click());
+document.getElementById('btnLimpiarLegajos').addEventListener('click', ()=>{
+  pedirConfirmacion('Limpiar legajos', '¿Está seguro que quiere borrar todo su legajo?', ()=>{
+    db.personal = [];
+    guardarDB();
+    renderPersonal();
+    document.getElementById('entOperarioBox').innerHTML='';
+    document.getElementById('devMovBox').innerHTML='';
+  });
+});
 document.getElementById('legajosCsvFile').addEventListener('change', (e)=>{
   const file = e.target.files[0];
   if(!file) return;
