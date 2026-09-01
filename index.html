@@ -328,6 +328,15 @@
 
   <!-- VISTA DISPOSITIVOS -->
   <section class="view" id="view-dispositivos">
+    <div class="card" style="margin-bottom:18px;">
+      <h2>Importar / Exportar Dispositivos.csv</h2>
+      <p class="sub">El archivo debe tener las columnas <strong>Tipo</strong> (Celular / Ringscanner / Tablet), <strong>Nombre</strong> (número identificador del dispositivo) y <strong>Marca</strong> (opcional). Si un dispositivo ya existe (mismo tipo y número) se actualiza; si es nuevo, se agrega. Si no viene la marca, se completa como "Pendiente" para que el guardia la vaya cargando después.</p>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn secondary" id="btnImportarDispositivosCsv">Importar Dispositivos.csv</button>
+        <button class="btn ghost" id="btnExportarDispositivosCsv">Exportar Dispositivos.csv</button>
+        <input type="file" id="dispositivosCsvFile" class="file-input-hidden" accept=".csv,text/csv">
+      </div>
+    </div>
     <div class="grid cols-2">
       <div class="card">
         <h2 id="devFormTitle">Cargar nuevo dispositivo</h2>
@@ -1302,6 +1311,87 @@ function importarLegajosCsv(texto){
   }
   return { nuevos, actualizados };
 }
+
+/* ============ IMPORTAR / EXPORTAR DISPOSITIVOS.CSV ============ */
+document.getElementById('btnImportarDispositivosCsv').addEventListener('click', ()=> document.getElementById('dispositivosCsvFile').click());
+document.getElementById('dispositivosCsvFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      const { nuevos, actualizados, ignorados } = importarDispositivosCsv(ev.target.result);
+      guardarDB();
+      renderDispositivos();
+      let msg = `Importación de Dispositivos.csv completa: ${nuevos} nuevo(s), ${actualizados} actualizado(s).`;
+      if(ignorados>0) msg += `\n${ignorados} fila(s) ignorada(s) por no reconocer el tipo (debe ser Celular, Ringscanner o Tablet).`;
+      alert(msg);
+    }catch(err){
+      alert('No se pudo procesar el archivo. Verificá que tenga las columnas "Tipo", "Nombre" y "Marca".');
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+  e.target.value='';
+});
+
+function normalizarTipoDispositivo(raw){
+  const t = (raw||'').trim().toLowerCase().replace(/[\s_-]+/g,'');
+  if(t==='celular') return 'Celular';
+  if(t==='tablet') return 'Tablet';
+  if(t==='ringscanner'||t==='ringscaner'||t==='scanner') return 'RING SCANNER';
+  return null;
+}
+
+function importarDispositivosCsv(texto){
+  const lineas = texto.split(/\r\n|\n|\r/).filter(l => l.trim().length>0);
+  if(lineas.length<2) throw new Error('CSV vacío');
+  const delim = lineas[0].includes(';') && !lineas[0].includes(',') ? ';' : ',';
+  const headers = lineas[0].split(delim).map(h => h.trim().toLowerCase().replace(/"/g,''));
+  const idxTipo = headers.findIndex(h => h.includes('tipo'));
+  const idxNombre = headers.findIndex(h => h.includes('nombre') || h.includes('numero') || h.includes('número'));
+  const idxMarca = headers.findIndex(h => h.includes('marca'));
+  if(idxNombre===-1) throw new Error('Falta la columna Nombre/Número');
+
+  let nuevos=0, actualizados=0, ignorados=0;
+  for(let i=1;i<lineas.length;i++){
+    const cols = lineas[i].split(delim).map(c => c.trim().replace(/^"|"$/g,''));
+    const numero = (cols[idxNombre]||'').trim();
+    if(!numero) continue;
+    const tipo = idxTipo!==-1 ? normalizarTipoDispositivo(cols[idxTipo]) : null;
+    if(!tipo){ ignorados++; continue; }
+    const marcaCsv = idxMarca!==-1 ? (cols[idxMarca]||'').trim() : '';
+
+    const existente = db.devices.find(d => d.tipo===tipo && String(d.numero).toLowerCase()===numero.toLowerCase());
+    if(existente){
+      if(marcaCsv) existente.marca = marcaCsv;
+      else if(!existente.marca) existente.marca = 'Pendiente';
+      actualizados++;
+    }else{
+      db.devices.push({
+        id: db.seq.device++, tipo, numero, marca: marcaCsv || 'Pendiente',
+        fechaIngreso: nowISODate(), fechaEgreso: null, observacion: '', estado: 'disponible'
+      });
+      nuevos++;
+    }
+  }
+  return { nuevos, actualizados, ignorados };
+}
+
+document.getElementById('btnExportarDispositivosCsv').addEventListener('click', ()=>{
+  if(db.devices.length===0){ alert('No hay dispositivos cargados para exportar.'); return; }
+  const headers = ['Tipo','Nombre','Marca','FechaIngreso','FechaEgreso','Estado','Observacion'];
+  const rows = db.devices.map(d=>{
+    const tipoCsv = d.tipo==='RING SCANNER' ? 'Ringscanner' : d.tipo;
+    return [tipoCsv, d.numero||'', d.marca||'', d.fechaIngreso||'', d.fechaEgreso||'', d.estado||'', d.observacion||'']
+      .map(v => `"${String(v).replace(/"/g,'""')}"`).join(';');
+  });
+  const csv = [headers.join(';'), ...rows].join('\r\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Dispositivos.csv';
+  a.click();
+});
 
 /* ============ INVENTARIO / AUDITORÍAS DE STOCK ============ */
 document.getElementById('btnIniciarAuditoria').addEventListener('click', iniciarAuditoria);
