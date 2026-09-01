@@ -435,7 +435,7 @@
         <input type="text" id="perLegajo" placeholder="Ej: 1042" inputmode="numeric">
         <label>Apellido</label>
         <input type="text" id="perApellido" placeholder="Ej: Gómez">
-        <label>Nombre</label>
+        <label>Nombre (opcional)</label>
         <input type="text" id="perNombre" placeholder="Ej: Marcos">
         <div class="btn-row">
           <button class="btn" id="btnGuardarPersonal">Guardar ficha</button>
@@ -1074,13 +1074,13 @@ document.getElementById('btnGuardarPersonal').addEventListener('click', ()=>{
   const legajo = document.getElementById('perLegajo').value.trim();
   const apellido = document.getElementById('perApellido').value.trim();
   const nombre = document.getElementById('perNombre').value.trim();
-  if(!legajo || !apellido || !nombre){ alert('Completá legajo, apellido y nombre.'); return; }
+  if(!legajo || !apellido){ alert('Completá al menos el legajo y el apellido (el nombre es opcional).'); return; }
 
   if(orig){
     const p = findPersonal(orig);
     if(p){ p.legajo=legajo; p.apellido=apellido; p.nombre=nombre; }
   }else{
-    if(findPersonal(legajo)){ alert('Ya existe una ficha con ese número de legajo.'); return; }
+    if(findPersonal(legajo)){ alert(`Ya existe una ficha con el legajo ${legajo}. Si querés modificarla, usá el botón ✎ (editar) en la lista de la derecha.`); return; }
     db.personal.push({legajo, apellido, nombre});
   }
   guardarDB();
