@@ -297,13 +297,16 @@
           <label>Nº de Ring Scanner</label>
           <input type="text" id="entNroRing" placeholder="Ej: RS-032" autocomplete="off">
 
+          <label>Nº de Llave</label>
+          <input type="text" id="entNroLlave" placeholder="Ej: LL-007" autocomplete="off">
+
           <label>Observación</label>
           <textarea id="entObs" placeholder="En blanco si no hay novedades"></textarea>
 
           <div class="btn-row">
             <button class="btn block" id="btnConfirmarEntrega">Confirmar entrega (OK)</button>
           </div>
-          <p class="sub" style="margin-top:12px;">Completá el número de celular/tablet, el de ring scanner, o ambos si el operario recibe los dos equipos.</p>
+          <p class="sub" style="margin-top:12px;">Completá el/los números de los equipos que corresponda entregar (celular/tablet, ring scanner y/o llave).</p>
         </div>
 
         <!-- DEVOLUCION -->
@@ -367,6 +370,7 @@
               <option value="Celular">Celular</option>
               <option value="RING SCANNER">RING SCANNER</option>
               <option value="Tablet">Tablet</option>
+              <option value="Llave">Llave</option>
             </select>
           </div>
           <div>
@@ -392,6 +396,7 @@
           <button class="btn" id="btnGuardarDevice">Guardar dispositivo</button>
           <button class="btn secondary" id="btnCancelarDevice" style="display:none;">Cancelar edición</button>
         </div>
+        <div id="devMantenimientoBox"></div>
       </div>
 
       <div class="card">
@@ -403,6 +408,7 @@
             <option value="Celular">Celular</option>
             <option value="RING SCANNER">RING SCANNER</option>
             <option value="Tablet">Tablet</option>
+            <option value="Llave">Llave</option>
           </select>
         </div>
         <div class="table-wrap">
@@ -499,9 +505,10 @@
 
   <!-- VISTA DASHBOARD -->
   <section class="view" id="view-dashboard">
-    <div class="grid cols-4" style="margin-bottom:18px;">
+    <div class="grid cols-5" style="margin-bottom:18px;">
       <div class="card stat"><span class="num" id="statDispositivos">0</span><span class="lbl">Dispositivos totales</span></div>
       <div class="card stat"><span class="num" id="statEnUso">0</span><span class="lbl">En uso ahora</span></div>
+      <div class="card stat"><span class="num" id="statMantenimiento">0</span><span class="lbl">En mantenimiento</span></div>
       <div class="card stat"><span class="num" id="statMovimientosMes">0</span><span class="lbl">Movimientos este mes</span></div>
       <div class="card stat"><span class="num" id="statAlertas">0</span><span class="lbl">Alertas activas</span></div>
     </div>
@@ -515,7 +522,7 @@
         <div class="chart-box"><canvas id="chartOperarios"></canvas></div>
       </div>
     </div>
-    <div class="grid cols-2">
+    <div class="grid cols-2" style="margin-bottom:18px;">
       <div class="card">
         <h3>Flujo de movimientos (últimos 30 días)</h3>
         <div class="chart-box"><canvas id="chartFlujo"></canvas></div>
@@ -530,14 +537,27 @@
         </div>
       </div>
     </div>
+    <div class="card">
+      <h3>Dispositivos en mantenimiento <span class="badge-count" id="mntCount">0</span></h3>
+      <div class="table-wrap" style="max-height:230px;">
+        <table>
+          <thead><tr><th>Dispositivo</th><th>Tipo</th><th>Enviado</th><th>Días en mantenimiento</th><th>Motivo</th></tr></thead>
+          <tbody id="mntDashTbody"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- VISTA REPORTES -->
   <section class="view" id="view-reportes">
     <div class="card">
-      <h2>Reporte de uso</h2>
-      <p class="sub">Generá un reporte mensual o anual con el detalle de uso de cada dispositivo y los operarios que lo manipularon.</p>
+      <h2>Reportes</h2>
+      <p class="sub">Generá un reporte mensual o anual de uso de dispositivos, o de los envíos a mantenimiento.</p>
       <div class="toolbar">
+        <select id="repCategoria">
+          <option value="movimientos">Uso de dispositivos</option>
+          <option value="mantenimientos">Mantenimientos</option>
+        </select>
         <select id="repModo">
           <option value="mensual">Mensual</option>
           <option value="anual">Anual</option>
@@ -548,12 +568,22 @@
         <button class="btn ghost" id="btnExportCSV">Exportar CSV</button>
       </div>
       <div id="repResumen" class="grid cols-3" style="margin-bottom:16px;"></div>
-      <div class="table-wrap">
+
+      <div class="table-wrap" id="repTablaMovimientosWrap">
         <table>
           <thead>
             <tr><th>Dispositivo</th><th>Tipo</th><th>Legajo</th><th>Operario</th><th>Entrega</th><th>Devolución</th><th>Estado</th><th>Obs.</th></tr>
           </thead>
           <tbody id="repTbody"></tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap" id="repTablaMantenimientosWrap" style="display:none;">
+        <table>
+          <thead>
+            <tr><th>Dispositivo</th><th>Tipo</th><th>Envío</th><th>Regreso</th><th>Estado</th><th>Obs. envío</th><th>Obs. regreso</th></tr>
+          </thead>
+          <tbody id="repMntTbody"></tbody>
         </table>
       </div>
     </div>
@@ -601,6 +631,7 @@ function cargarDB(){
     const merged = Object.assign(base, parsed);
     merged.seq = Object.assign(base.seq, parsed.seq||{});
     merged.auditorias = parsed.auditorias || [];
+    merged.devices.forEach(d=>{ if(!d.mantenimientos) d.mantenimientos = []; });
     return merged;
   }catch(e){ return dbVacia(); }
 }
@@ -705,7 +736,7 @@ function buscarOCrearDispositivo(tipo, numero){
     device = {
       id: db.seq.device++, tipo, numero, marca:'', fechaIngreso: nowISODate(), fechaEgreso: null,
       observacion: 'Alta automática desde Entregar dispositivo — completar marca si corresponde.',
-      estado: 'disponible'
+      estado: 'disponible', mantenimientos: []
     };
     db.devices.push(device);
   }
@@ -775,17 +806,19 @@ document.getElementById('btnConfirmarEntrega').addEventListener('click', ()=>{
   const tipoCel = document.getElementById('entTipoCel').value;
   const nroCel = document.getElementById('entNroCel').value.trim();
   const nroRing = document.getElementById('entNroRing').value.trim();
+  const nroLlave = document.getElementById('entNroLlave').value.trim();
   const obs = document.getElementById('entObs').value.trim();
 
   if(!legajo){ alert('Ingresá el número de legajo del operario.'); document.getElementById('entLegajo').focus(); return; }
   const persona = findPersonal(legajo);
   if(!persona){ alert('El legajo no está registrado. Cargalo en la pestaña "Personal" antes de continuar.'); return; }
-  if(!nroCel && !nroRing){ alert('Ingresá al menos un número de dispositivo (celular/tablet o ring scanner).'); return; }
+  if(!nroCel && !nroRing && !nroLlave){ alert('Ingresá al menos un número de dispositivo (celular/tablet, ring scanner o llave).'); return; }
 
   // Validar disponibilidad ANTES de registrar nada (operación atómica)
   const pendientes = [];
   if(nroCel) pendientes.push({tipo: tipoCel, numero: nroCel});
   if(nroRing) pendientes.push({tipo: 'RING SCANNER', numero: nroRing});
+  if(nroLlave) pendientes.push({tipo: 'Llave', numero: nroLlave});
 
   for(const pend of pendientes){
     const existente = db.devices.find(d => d.tipo===pend.tipo && String(d.numero).toLowerCase()===String(pend.numero).toLowerCase());
@@ -813,6 +846,7 @@ document.getElementById('btnConfirmarEntrega').addEventListener('click', ()=>{
   document.getElementById('entLegajo').value='';
   document.getElementById('entNroCel').value='';
   document.getElementById('entNroRing').value='';
+  document.getElementById('entNroLlave').value='';
   document.getElementById('entTipoCel').value='Celular';
   document.getElementById('entObs').value='';
   document.getElementById('entOperarioBox').innerHTML='';
@@ -960,6 +994,7 @@ function limpiarFormDevice(){
   document.getElementById('devObsForm').value='';
   document.getElementById('devFormTitle').textContent='Cargar nuevo dispositivo';
   document.getElementById('btnCancelarDevice').style.display='none';
+  document.getElementById('devMantenimientoBox').innerHTML='';
 }
 document.getElementById('btnCancelarDevice').addEventListener('click', limpiarFormDevice);
 
@@ -987,7 +1022,7 @@ document.getElementById('btnGuardarDevice').addEventListener('click', ()=>{
   }else{
     db.devices.push({
       id: db.seq.device++, tipo, numero, marca, fechaIngreso, fechaEgreso: fechaEgreso||null,
-      observacion: obs, estado: 'disponible'
+      observacion: obs, estado: 'disponible', mantenimientos: []
     });
   }
   guardarDB();
@@ -1014,7 +1049,8 @@ function renderDispositivos(){
     disponible: '<span class="pill ok">Disponible</span>',
     en_uso: '<span class="pill neutral">En uso</span>',
     'dañado': '<span class="pill bad">Dañado</span>',
-    extraviado: '<span class="pill bad">Extraviado</span>'
+    extraviado: '<span class="pill bad">Extraviado</span>',
+    mantenimiento: '<span class="pill warn">En mantenimiento</span>'
   };
   tbody.innerHTML = list.map(d=>`
     <tr>
@@ -1046,6 +1082,7 @@ document.getElementById('devTbody').addEventListener('click', (e)=>{
     document.getElementById('devObsForm').value = d.observacion||'';
     document.getElementById('devFormTitle').textContent = 'Editar dispositivo #'+d.id;
     document.getElementById('btnCancelarDevice').style.display='';
+    renderMantenimientoBox(d.id);
     window.scrollTo({top:0, behavior:'smooth'});
   }
   if(delId){
@@ -1057,6 +1094,81 @@ document.getElementById('devTbody').addEventListener('click', (e)=>{
     });
   }
 });
+
+/* ============ MANTENIMIENTO DE DISPOSITIVOS ============ */
+function renderMantenimientoBox(deviceId){
+  const box = document.getElementById('devMantenimientoBox');
+  const device = findDevice(deviceId);
+  if(!device){ box.innerHTML=''; return; }
+  if(!device.mantenimientos) device.mantenimientos = [];
+  const abierto = device.mantenimientos.find(m => !m.cerrado);
+
+  let html = `<div class="card" style="background:var(--bg-soft); margin-top:16px; box-shadow:none;"><h3 style="margin-bottom:10px;">Mantenimiento</h3>`;
+
+  if(device.estado==='en_uso'){
+    html += `<p class="sub">Este dispositivo está entregado a un operario; no se puede enviar a mantenimiento hasta que sea devuelto.</p>`;
+  }else if(abierto){
+    html += `
+      <div class="op-card warn-box" style="display:block;">
+        <div class="name">En mantenimiento desde ${fmtFecha(abierto.fechaEnvio)} ${abierto.horaEnvio}hs</div>
+        ${abierto.obsEnvio? `<div class="legajo">Motivo: ${escapeHtml(abierto.obsEnvio)}</div>` : ''}
+      </div>
+      <label>Fecha de regreso</label>
+      <input type="date" id="mntFechaRegreso" value="${nowISODate()}">
+      <label>Observación de regreso</label>
+      <textarea id="mntObsRegreso" placeholder="Reparación realizada, repuestos, etc."></textarea>
+      <div class="btn-row"><button class="btn block" id="btnRegistrarRegreso">Registrar regreso de mantenimiento</button></div>`;
+  }else{
+    html += `
+      <label>Fecha de envío a mantenimiento</label>
+      <input type="date" id="mntFechaEnvio" value="${nowISODate()}">
+      <label>Observación</label>
+      <textarea id="mntObsEnvio" placeholder="Motivo del envío a mantenimiento"></textarea>
+      <div class="btn-row"><button class="btn secondary block" id="btnEnviarMantenimiento">Enviar a mantenimiento</button></div>`;
+  }
+
+  if(device.mantenimientos.length>0){
+    html += `<label style="margin-top:16px;">Historial (${device.mantenimientos.length} vez/veces)</label>
+      <div class="table-wrap" style="max-height:180px;"><table><thead><tr><th>Envío</th><th>Regreso</th><th>Obs.</th></tr></thead><tbody>`;
+    [...device.mantenimientos].sort((a,b)=>b.id-a.id).forEach(m=>{
+      html += `<tr>
+        <td>${fmtFecha(m.fechaEnvio)} ${m.horaEnvio}</td>
+        <td>${m.cerrado? fmtFecha(m.fechaRegreso)+' '+m.horaRegreso : '<span class="pill warn">Pendiente</span>'}</td>
+        <td>${escapeHtml((m.obsEnvio||'')+(m.obsRegreso?' / '+m.obsRegreso:''))}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+  html += `</div>`;
+  box.innerHTML = html;
+
+  const btnEnviar = document.getElementById('btnEnviarMantenimiento');
+  if(btnEnviar) btnEnviar.addEventListener('click', ()=>{
+    const fecha = document.getElementById('mntFechaEnvio').value || nowISODate();
+    const obs = document.getElementById('mntObsEnvio').value.trim();
+    device.mantenimientos.push({
+      id: Date.now(), fechaEnvio: fecha, horaEnvio: nowTime(), obsEnvio: obs,
+      fechaRegreso: null, horaRegreso: null, obsRegreso: '', cerrado: false
+    });
+    device.estado = 'mantenimiento';
+    guardarDB();
+    renderDispositivos();
+    renderMantenimientoBox(deviceId);
+  });
+  const btnRegreso = document.getElementById('btnRegistrarRegreso');
+  if(btnRegreso) btnRegreso.addEventListener('click', ()=>{
+    const fecha = document.getElementById('mntFechaRegreso').value || nowISODate();
+    const obs = document.getElementById('mntObsRegreso').value.trim();
+    const abiertoM = device.mantenimientos.find(m => !m.cerrado);
+    if(abiertoM){
+      abiertoM.fechaRegreso = fecha; abiertoM.horaRegreso = nowTime(); abiertoM.obsRegreso = obs; abiertoM.cerrado = true;
+    }
+    device.estado = 'disponible';
+    guardarDB();
+    renderDispositivos();
+    renderMantenimientoBox(deviceId);
+  });
+}
 
 /* ============ PERSONAL (ABM) ============ */
 function limpiarFormPersonal(){
@@ -1140,6 +1252,26 @@ function renderDashboard(){
   document.getElementById('statDispositivos').textContent = db.devices.length;
   document.getElementById('statEnUso').textContent = db.devices.filter(d=>d.estado==='en_uso').length;
 
+  const dispEnMantenimiento = db.devices.filter(d=>d.estado==='mantenimiento');
+  document.getElementById('statMantenimiento').textContent = dispEnMantenimiento.length;
+  document.getElementById('mntCount').textContent = dispEnMantenimiento.length;
+  const mntBody = document.getElementById('mntDashTbody');
+  if(dispEnMantenimiento.length===0){
+    mntBody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><span>🔧</span>No hay dispositivos en mantenimiento en este momento.</div></td></tr>`;
+  }else{
+    mntBody.innerHTML = dispEnMantenimiento.map(d=>{
+      const abierto = (d.mantenimientos||[]).find(m=>!m.cerrado);
+      const dias = abierto ? Math.max(0, Math.floor((Date.now() - new Date(abierto.fechaEnvio+'T'+abierto.horaEnvio+':00').getTime())/86400000)) : '—';
+      return `<tr class="row-alert">
+        <td>${escapeHtml(deviceLabel(d))}</td>
+        <td>${escapeHtml(d.tipo)}</td>
+        <td>${abierto? fmtFecha(abierto.fechaEnvio)+' '+abierto.horaEnvio : '—'}</td>
+        <td>${dias}</td>
+        <td>${escapeHtml(abierto&&abierto.obsEnvio ? abierto.obsEnvio : '—')}</td>
+      </tr>`;
+    }).join('');
+  }
+
   const hoy = new Date();
   const movMes = db.movimientos.filter(m=>{
     const f = new Date(m.fechaEntrega);
@@ -1182,14 +1314,14 @@ function renderCharts(){
   Chart.defaults.font.family = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
 
   // Chart 1: por tipo
-  const tipos = ['Celular','RING SCANNER','Tablet'];
+  const tipos = ['Celular','RING SCANNER','Tablet','Llave'];
   const countsTipo = tipos.map(t => db.movimientos.filter(m=>{
     const dv = findDevice(m.deviceId); return dv && dv.tipo===t;
   }).length);
   if(charts.tipo) charts.tipo.destroy();
   charts.tipo = new Chart(document.getElementById('chartTipo'), {
     type:'doughnut',
-    data:{ labels:tipos, datasets:[{ data:countsTipo, backgroundColor:['#2563eb','#e8690c','#17a24a'], borderWidth:0 }]},
+    data:{ labels:tipos, datasets:[{ data:countsTipo, backgroundColor:['#2563eb','#e8690c','#17a24a','#9333ea'], borderWidth:0 }]},
     options:{ maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
   });
 
@@ -1239,10 +1371,24 @@ function poblarSelectoresReporte(){
 document.getElementById('repModo').addEventListener('change', ()=>{
   document.getElementById('repMes').style.display = document.getElementById('repModo').value==='mensual' ? '' : 'none';
 });
+document.getElementById('repCategoria').addEventListener('change', ()=>{
+  const esMnt = document.getElementById('repCategoria').value==='mantenimientos';
+  document.getElementById('repTablaMovimientosWrap').style.display = esMnt ? 'none' : '';
+  document.getElementById('repTablaMantenimientosWrap').style.display = esMnt ? '' : 'none';
+  document.getElementById('repResumen').innerHTML = '';
+});
 
 let ultimoReporte = [];
+let ultimoReporteCategoria = 'movimientos';
 document.getElementById('btnGenerarReporte').addEventListener('click', generarReporte);
 function generarReporte(){
+  const categoria = document.getElementById('repCategoria').value;
+  ultimoReporteCategoria = categoria;
+  if(categoria==='mantenimientos') generarReporteMantenimientos();
+  else generarReporteMovimientos();
+}
+
+function generarReporteMovimientos(){
   const modo = document.getElementById('repModo').value;
   const mes = Number(document.getElementById('repMes').value);
   const anio = Number(document.getElementById('repAnio').value);
@@ -1275,7 +1421,6 @@ function generarReporte(){
     }).join('');
   }
 
-  // resumen
   const totalMov = ultimoReporte.length;
   const totalDanio = ultimoReporte.filter(m=>m.estadoDevolucion==='Dañado').length;
   const totalExtravio = ultimoReporte.filter(m=>m.estadoDevolucion==='Extraviado').length;
@@ -1287,23 +1432,80 @@ function generarReporte(){
   `;
 }
 
+function generarReporteMantenimientos(){
+  const modo = document.getElementById('repModo').value;
+  const mes = Number(document.getElementById('repMes').value);
+  const anio = Number(document.getElementById('repAnio').value);
+
+  const registros = [];
+  db.devices.forEach(d=>{
+    (d.mantenimientos||[]).forEach(m=>{
+      const f = new Date(m.fechaEnvio+'T00:00:00');
+      if(f.getFullYear()!==anio) return;
+      if(modo==='mensual' && f.getMonth()!==mes) return;
+      registros.push({device: d, mnt: m});
+    });
+  });
+  registros.sort((a,b)=>a.mnt.fechaEnvio.localeCompare(b.mnt.fechaEnvio));
+  ultimoReporte = registros;
+
+  const tbody = document.getElementById('repMntTbody');
+  if(registros.length===0){
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><span>🔧</span>No hay envíos a mantenimiento en el período seleccionado.</div></td></tr>`;
+  }else{
+    tbody.innerHTML = registros.map(({device, mnt})=>`
+      <tr class="${!mnt.cerrado?'row-alert':''}">
+        <td>${escapeHtml(device.numero||device.marca||'')}</td>
+        <td>${escapeHtml(device.tipo)}</td>
+        <td>${fmtFecha(mnt.fechaEnvio)} ${mnt.horaEnvio}</td>
+        <td>${mnt.cerrado? fmtFecha(mnt.fechaRegreso)+' '+mnt.horaRegreso : '—'}</td>
+        <td>${mnt.cerrado? '<span class="pill ok">Devuelto</span>' : '<span class="pill warn">En mantenimiento</span>'}</td>
+        <td>${escapeHtml(mnt.obsEnvio||'—')}</td>
+        <td>${escapeHtml(mnt.obsRegreso||'—')}</td>
+      </tr>`).join('');
+  }
+
+  const totalEnvios = registros.length;
+  const pendientes = registros.filter(r=>!r.mnt.cerrado).length;
+  const dispositivosUnicos = new Set(registros.map(r=>r.device.id)).size;
+  document.getElementById('repResumen').innerHTML = `
+    <div class="card stat"><span class="num">${totalEnvios}</span><span class="lbl">Envíos a mantenimiento en el período</span></div>
+    <div class="card stat"><span class="num">${dispositivosUnicos}</span><span class="lbl">Dispositivos distintos</span></div>
+    <div class="card stat"><span class="num">${pendientes}</span><span class="lbl">Todavía en mantenimiento</span></div>
+  `;
+}
+
 document.getElementById('btnExportCSV').addEventListener('click', ()=>{
   if(ultimoReporte.length===0){ alert('Generá el reporte primero.'); return; }
-  const headers = ['Dispositivo','Tipo','Legajo','Operario','FechaEntrega','HoraEntrega','FechaDevolucion','HoraDevolucion','Estado','ObsEntrega','ObsDevolucion'];
-  const rows = ultimoReporte.map(m=>{
-    const device = findDevice(m.deviceId);
-    const persona = findPersonal(m.legajo);
-    return [
-      device?(device.numero||device.marca||''):'', device?device.tipo:'', m.legajo, persona?fullName(persona):'',
-      m.fechaEntrega, m.horaEntrega, m.fechaDevolucion||'', m.horaDevolucion||'',
-      m.estadoDevolucion||'En uso', m.obsEntrega||'', m.obsDevolucion||''
-    ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';');
-  });
+  let headers, rows, nombreArchivo;
+
+  if(ultimoReporteCategoria==='mantenimientos'){
+    headers = ['Dispositivo','Tipo','FechaEnvio','HoraEnvio','FechaRegreso','HoraRegreso','Estado','ObsEnvio','ObsRegreso'];
+    rows = ultimoReporte.map(({device, mnt})=>[
+      device.numero||device.marca||'', device.tipo, mnt.fechaEnvio, mnt.horaEnvio,
+      mnt.fechaRegreso||'', mnt.horaRegreso||'', mnt.cerrado?'Devuelto':'En mantenimiento',
+      mnt.obsEnvio||'', mnt.obsRegreso||''
+    ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';'));
+    nombreArchivo = `reporte_mantenimientos_${document.getElementById('repAnio').value}_${document.getElementById('repModo').value}.csv`;
+  }else{
+    headers = ['Dispositivo','Tipo','Legajo','Operario','FechaEntrega','HoraEntrega','FechaDevolucion','HoraDevolucion','Estado','ObsEntrega','ObsDevolucion'];
+    rows = ultimoReporte.map(m=>{
+      const device = findDevice(m.deviceId);
+      const persona = findPersonal(m.legajo);
+      return [
+        device?(device.numero||device.marca||''):'', device?device.tipo:'', m.legajo, persona?fullName(persona):'',
+        m.fechaEntrega, m.horaEntrega, m.fechaDevolucion||'', m.horaDevolucion||'',
+        m.estadoDevolucion||'En uso', m.obsEntrega||'', m.obsDevolucion||''
+      ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';');
+    });
+    nombreArchivo = `reporte_dispositivos_${document.getElementById('repAnio').value}_${document.getElementById('repModo').value}.csv`;
+  }
+
   const csv = [headers.join(';'), ...rows].join('\r\n');
   const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `reporte_dispositivos_${document.getElementById('repAnio').value}_${document.getElementById('repModo').value}.csv`;
+  a.download = nombreArchivo;
   a.click();
 });
 
@@ -1419,6 +1621,7 @@ function normalizarTipoDispositivo(raw){
   if(t==='celular') return 'Celular';
   if(t==='tablet') return 'Tablet';
   if(t==='ringscanner'||t==='ringscaner'||t==='scanner') return 'RING SCANNER';
+  if(t==='llave'||t==='llaves'||t==='key'||t==='keys') return 'Llave';
   return null;
 }
 
@@ -1449,7 +1652,7 @@ function importarDispositivosCsv(texto){
     }else{
       db.devices.push({
         id: db.seq.device++, tipo, numero, marca: marcaCsv || 'Pendiente',
-        fechaIngreso: nowISODate(), fechaEgreso: null, observacion: '', estado: 'disponible'
+        fechaIngreso: nowISODate(), fechaEgreso: null, observacion: '', estado: 'disponible', mantenimientos: []
       });
       nuevos++;
     }
