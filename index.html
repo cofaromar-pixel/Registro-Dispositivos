@@ -355,8 +355,10 @@
       <div class="btn-row" style="margin-top:0;">
         <button class="btn secondary" id="btnImportarDispositivosCsv">Importar Dispositivos.csv</button>
         <button class="btn ghost" id="btnExportarDispositivosCsv">Exportar Dispositivos.csv</button>
+        <button class="btn danger" id="btnLimpiarDispositivos">🔒 Limpiar dispositivos</button>
         <input type="file" id="dispositivosCsvFile" class="file-input-hidden" accept=".csv,text/csv">
       </div>
+      <p class="sub" style="margin-top:10px; margin-bottom:0;">Dar de alta un dispositivo nuevo (desde acá, desde el CSV o desde "Entregar dispositivo") y limpiar la base de dispositivos requieren la clave de autorización.</p>
     </div>
     <div class="grid cols-2">
       <div class="card">
@@ -612,6 +614,18 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="claveOverlay">
+  <div class="modal">
+    <h3>🔒 Clave requerida</h3>
+    <p id="claveText">Esta acción requiere autorización.</p>
+    <input type="password" id="claveInput" placeholder="Ingresá la clave" autocomplete="off">
+    <div class="btn-row">
+      <button class="btn" id="claveConfirm">Confirmar</button>
+      <button class="btn secondary" id="claveCancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <footer class="hint">Los datos se guardan en este navegador (localStorage). Usá "Exportar" periódicamente para respaldar la información.</footer>
 
 <script>
@@ -708,6 +722,36 @@ document.getElementById('modalCancel').addEventListener('click', ()=>{
   modalCallback = null;
 });
 
+/* ============ MODAL DE CLAVE (protege alta y borrado de dispositivos) ============ */
+const CLAVE_DISPOSITIVOS = 'ies21';
+let claveCallback = null;
+function pedirClave(mensaje, callback){
+  document.getElementById('claveText').textContent = mensaje;
+  document.getElementById('claveInput').value='';
+  claveCallback = callback;
+  document.getElementById('claveOverlay').classList.add('active');
+  setTimeout(()=> document.getElementById('claveInput').focus(), 60);
+}
+function intentarClave(){
+  const val = document.getElementById('claveInput').value;
+  if(val===CLAVE_DISPOSITIVOS){
+    document.getElementById('claveOverlay').classList.remove('active');
+    const cb = claveCallback; claveCallback=null;
+    if(cb) cb();
+  }else{
+    alert('Clave incorrecta.');
+    document.getElementById('claveInput').value='';
+    document.getElementById('claveInput').focus();
+  }
+}
+document.getElementById('claveConfirm').addEventListener('click', intentarClave);
+document.getElementById('claveInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') intentarClave(); });
+document.getElementById('claveCancel').addEventListener('click', ()=>{
+  document.getElementById('claveOverlay').classList.remove('active');
+  document.getElementById('claveInput').value='';
+  claveCallback = null;
+});
+
 /* ============ MOVIMIENTOS: ENTREGA ============ */
 document.getElementById('tabEntrega').addEventListener('click', ()=>{
   document.getElementById('tabEntrega').classList.add('active');
@@ -729,17 +773,14 @@ function deviceLabel(d){
   return `${d.tipo} #${d.numero}` + (d.marca ? ' — ' + d.marca : '');
 }
 
-// Busca un dispositivo por tipo+numero; si no existe, lo crea automáticamente (alta rápida)
-function buscarOCrearDispositivo(tipo, numero){
-  let device = db.devices.find(d => d.tipo===tipo && String(d.numero).toLowerCase()===String(numero).toLowerCase());
-  if(!device){
-    device = {
-      id: db.seq.device++, tipo, numero, marca:'', fechaIngreso: nowISODate(), fechaEgreso: null,
-      observacion: 'Alta automática desde Entregar dispositivo — completar marca si corresponde.',
-      estado: 'disponible', mantenimientos: []
-    };
-    db.devices.push(device);
-  }
+// Crea un dispositivo nuevo (solo debe llamarse tras confirmar la clave, o desde altas ya autorizadas)
+function crearDispositivo(tipo, numero, marca, origen){
+  const device = {
+    id: db.seq.device++, tipo, numero, marca: marca||'',
+    fechaIngreso: nowISODate(), fechaEgreso: null,
+    observacion: origen || '', estado: 'disponible', mantenimientos: []
+  };
+  db.devices.push(device);
   return device;
 }
 
@@ -814,46 +855,61 @@ document.getElementById('btnConfirmarEntrega').addEventListener('click', ()=>{
   if(!persona){ alert('El legajo no está registrado. Cargalo en la pestaña "Personal" antes de continuar.'); return; }
   if(!nroCel && !nroRing && !nroLlave){ alert('Ingresá al menos un número de dispositivo (celular/tablet, ring scanner o llave).'); return; }
 
-  // Validar disponibilidad ANTES de registrar nada (operación atómica)
   const pendientes = [];
   if(nroCel) pendientes.push({tipo: tipoCel, numero: nroCel});
   if(nroRing) pendientes.push({tipo: 'RING SCANNER', numero: nroRing});
   if(nroLlave) pendientes.push({tipo: 'Llave', numero: nroLlave});
 
+  // Clasificar: existentes disponibles, existentes no disponibles (rechaza) y no registrados (requieren clave)
+  const noRegistrados = [];
   for(const pend of pendientes){
     const existente = db.devices.find(d => d.tipo===pend.tipo && String(d.numero).toLowerCase()===String(pend.numero).toLowerCase());
-    if(existente && existente.estado!=='disponible'){
-      alert(`El ${pend.tipo} Nº ${pend.numero} ya figura como "${existente.estado}" y no está disponible para entregar.`);
-      return;
+    if(existente){
+      if(existente.estado!=='disponible'){
+        alert(`El ${pend.tipo} Nº ${pend.numero} ya figura como "${existente.estado}" y no está disponible para entregar.`);
+        return;
+      }
+    }else{
+      noRegistrados.push(pend);
     }
   }
 
-  const fecha = nowISODate(), hora = nowTime();
-  const entregados = [];
-  pendientes.forEach(pend=>{
-    const device = buscarOCrearDispositivo(pend.tipo, pend.numero);
-    const mov = {
-      id: db.seq.mov++, deviceId: device.id, legajo: persona.legajo,
-      fechaEntrega: fecha, horaEntrega: hora, obsEntrega: obs,
-      fechaDevolucion: null, horaDevolucion: null, estadoDevolucion: null, obsDevolucion: '', cerrado: false
-    };
-    db.movimientos.push(mov);
-    device.estado = 'en_uso';
-    entregados.push(device);
-  });
-  guardarDB();
+  const ejecutarEntrega = ()=>{
+    const fecha = nowISODate(), hora = nowTime();
+    const entregados = [];
+    pendientes.forEach(pend=>{
+      let device = db.devices.find(d => d.tipo===pend.tipo && String(d.numero).toLowerCase()===String(pend.numero).toLowerCase());
+      if(!device) device = crearDispositivo(pend.tipo, pend.numero, '', 'Alta autorizada con clave desde Entregar dispositivo — completar marca si corresponde.');
+      const mov = {
+        id: db.seq.mov++, deviceId: device.id, legajo: persona.legajo,
+        fechaEntrega: fecha, horaEntrega: hora, obsEntrega: obs,
+        fechaDevolucion: null, horaDevolucion: null, estadoDevolucion: null, obsDevolucion: '', cerrado: false
+      };
+      db.movimientos.push(mov);
+      device.estado = 'en_uso';
+      entregados.push(device);
+    });
+    guardarDB();
 
-  document.getElementById('entLegajo').value='';
-  document.getElementById('entNroCel').value='';
-  document.getElementById('entNroRing').value='';
-  document.getElementById('entNroLlave').value='';
-  document.getElementById('entTipoCel').value='Celular';
-  document.getElementById('entObs').value='';
-  document.getElementById('entOperarioBox').innerHTML='';
-  renderHistorial();
-  renderDispositivos();
-  document.getElementById('entLegajo').focus();
-  alert(`Entrega registrada para ${fullName(persona)}: ${entregados.map(deviceLabel).join(' + ')}.`);
+    document.getElementById('entLegajo').value='';
+    document.getElementById('entNroCel').value='';
+    document.getElementById('entNroRing').value='';
+    document.getElementById('entNroLlave').value='';
+    document.getElementById('entTipoCel').value='Celular';
+    document.getElementById('entObs').value='';
+    document.getElementById('entOperarioBox').innerHTML='';
+    renderHistorial();
+    renderDispositivos();
+    document.getElementById('entLegajo').focus();
+    alert(`Entrega registrada para ${fullName(persona)}: ${entregados.map(deviceLabel).join(' + ')}.`);
+  };
+
+  if(noRegistrados.length>0){
+    const listado = noRegistrados.map(p=>`${p.tipo} Nº ${p.numero}`).join(', ');
+    pedirClave(`Estos dispositivos no están registrados en el sistema: ${listado}. Ingresá la clave para darlos de alta y completar la entrega.`, ejecutarEntrega);
+  }else{
+    ejecutarEntrega();
+  }
 });
 
 /* ============ MOVIMIENTOS: DEVOLUCION ============ */
@@ -1013,21 +1069,30 @@ document.getElementById('btnGuardarDevice').addEventListener('click', ()=>{
   const duplicado = db.devices.find(d => d.tipo===tipo && String(d.numero).toLowerCase()===numero.toLowerCase() && String(d.id)!==String(id));
   if(duplicado){ alert(`Ya existe un ${tipo} con el número ${numero}.`); return; }
 
-  if(id){
-    const device = findDevice(Number(id));
-    if(device){
-      device.tipo=tipo; device.numero=numero; device.marca=marca; device.fechaIngreso=fechaIngreso;
-      device.fechaEgreso=fechaEgreso||null; device.observacion=obs;
+  const guardar = ()=>{
+    if(id){
+      const device = findDevice(Number(id));
+      if(device){
+        device.tipo=tipo; device.numero=numero; device.marca=marca; device.fechaIngreso=fechaIngreso;
+        device.fechaEgreso=fechaEgreso||null; device.observacion=obs;
+      }
+    }else{
+      db.devices.push({
+        id: db.seq.device++, tipo, numero, marca, fechaIngreso, fechaEgreso: fechaEgreso||null,
+        observacion: obs, estado: 'disponible', mantenimientos: []
+      });
     }
+    guardarDB();
+    limpiarFormDevice();
+    renderDispositivos();
+  };
+
+  if(!id){
+    // Alta de un dispositivo nuevo: requiere clave
+    pedirClave(`Vas a dar de alta un nuevo ${tipo} (Nº ${numero}). Ingresá la clave para confirmar.`, guardar);
   }else{
-    db.devices.push({
-      id: db.seq.device++, tipo, numero, marca, fechaIngreso, fechaEgreso: fechaEgreso||null,
-      observacion: obs, estado: 'disponible', mantenimientos: []
-    });
+    guardar();
   }
-  guardarDB();
-  limpiarFormDevice();
-  renderDispositivos();
 });
 
 function renderDispositivos(){
@@ -1087,10 +1152,12 @@ document.getElementById('devTbody').addEventListener('click', (e)=>{
   }
   if(delId){
     const id = Number(delId.dataset.del);
-    pedirConfirmacion('Eliminar dispositivo', '¿Seguro que querés eliminar este dispositivo? Esta acción no se puede deshacer.', ()=>{
-      db.devices = db.devices.filter(d=>d.id!==id);
-      guardarDB();
-      renderDispositivos();
+    pedirConfirmacion('Eliminar dispositivo', '¿Seguro que querés eliminar este dispositivo? Esta acción requiere la clave y no se puede deshacer.', ()=>{
+      pedirClave('Ingresá la clave para confirmar la eliminación del dispositivo.', ()=>{
+        db.devices = db.devices.filter(d=>d.id!==id);
+        guardarDB();
+        renderDispositivos();
+      });
     });
   }
 });
@@ -1601,15 +1668,42 @@ document.getElementById('dispositivosCsvFile').addEventListener('change', (e)=>{
   if(!file) return;
   const reader = new FileReader();
   reader.onload = (ev)=>{
+    let filas, ignorados;
     try{
-      const { nuevos, actualizados, ignorados } = importarDispositivosCsv(ev.target.result);
-      guardarDB();
-      renderDispositivos();
-      let msg = `Importación de Dispositivos.csv completa: ${nuevos} nuevo(s), ${actualizados} actualizado(s).`;
-      if(ignorados>0) msg += `\n${ignorados} fila(s) ignorada(s) por no reconocer el tipo (debe ser Celular, Ringscanner o Tablet).`;
-      alert(msg);
+      ({ filas, ignorados } = parsearDispositivosCsv(ev.target.result));
     }catch(err){
       alert('No se pudo procesar el archivo. Verificá que tenga las columnas "Tipo", "Nombre" y "Marca".');
+      e.target.value=''; return;
+    }
+    const nuevos = filas.filter(f => !db.devices.find(d => d.tipo===f.tipo && String(d.numero).toLowerCase()===f.numero.toLowerCase()));
+
+    const aplicarImportacion = ()=>{
+      let nCreados=0, nActualizados=0;
+      filas.forEach(f=>{
+        const existente = db.devices.find(d => d.tipo===f.tipo && String(d.numero).toLowerCase()===f.numero.toLowerCase());
+        if(existente){
+          if(f.marcaCsv) existente.marca = f.marcaCsv;
+          else if(!existente.marca) existente.marca = 'Pendiente';
+          nActualizados++;
+        }else{
+          db.devices.push({
+            id: db.seq.device++, tipo: f.tipo, numero: f.numero, marca: f.marcaCsv || 'Pendiente',
+            fechaIngreso: nowISODate(), fechaEgreso: null, observacion: '', estado: 'disponible', mantenimientos: []
+          });
+          nCreados++;
+        }
+      });
+      guardarDB();
+      renderDispositivos();
+      let msg = `Importación de Dispositivos.csv completa: ${nCreados} nuevo(s), ${nActualizados} actualizado(s).`;
+      if(ignorados>0) msg += `\n${ignorados} fila(s) ignorada(s) por no reconocer el tipo (debe ser Celular, Ringscanner, Tablet o Llave).`;
+      alert(msg);
+    };
+
+    if(nuevos.length>0){
+      pedirClave(`El archivo incluye ${nuevos.length} dispositivo(s) que no están registrados en el sistema. Ingresá la clave para darlos de alta y completar la importación.`, aplicarImportacion);
+    }else{
+      aplicarImportacion();
     }
   };
   reader.readAsText(file, 'utf-8');
@@ -1625,7 +1719,7 @@ function normalizarTipoDispositivo(raw){
   return null;
 }
 
-function importarDispositivosCsv(texto){
+function parsearDispositivosCsv(texto){
   const lineas = texto.split(/\r\n|\n|\r/).filter(l => l.trim().length>0);
   if(lineas.length<2) throw new Error('CSV vacío');
   const delim = lineas[0].includes(';') && !lineas[0].includes(',') ? ';' : ',';
@@ -1635,7 +1729,8 @@ function importarDispositivosCsv(texto){
   const idxMarca = headers.findIndex(h => h.includes('marca'));
   if(idxNombre===-1) throw new Error('Falta la columna Nombre/Número');
 
-  let nuevos=0, actualizados=0, ignorados=0;
+  const filas = [];
+  let ignorados = 0;
   for(let i=1;i<lineas.length;i++){
     const cols = lineas[i].split(delim).map(c => c.trim().replace(/^"|"$/g,''));
     const numero = (cols[idxNombre]||'').trim();
@@ -1643,22 +1738,22 @@ function importarDispositivosCsv(texto){
     const tipo = idxTipo!==-1 ? normalizarTipoDispositivo(cols[idxTipo]) : null;
     if(!tipo){ ignorados++; continue; }
     const marcaCsv = idxMarca!==-1 ? (cols[idxMarca]||'').trim() : '';
-
-    const existente = db.devices.find(d => d.tipo===tipo && String(d.numero).toLowerCase()===numero.toLowerCase());
-    if(existente){
-      if(marcaCsv) existente.marca = marcaCsv;
-      else if(!existente.marca) existente.marca = 'Pendiente';
-      actualizados++;
-    }else{
-      db.devices.push({
-        id: db.seq.device++, tipo, numero, marca: marcaCsv || 'Pendiente',
-        fechaIngreso: nowISODate(), fechaEgreso: null, observacion: '', estado: 'disponible', mantenimientos: []
-      });
-      nuevos++;
-    }
+    filas.push({ tipo, numero, marcaCsv });
   }
-  return { nuevos, actualizados, ignorados };
+  return { filas, ignorados };
 }
+
+document.getElementById('btnLimpiarDispositivos').addEventListener('click', ()=>{
+  pedirClave('Esta acción borra por completo la base de dispositivos. Ingresá la clave para confirmar.', ()=>{
+    pedirConfirmacion('Limpiar dispositivos', '¿Está seguro que quiere borrar todos los dispositivos?', ()=>{
+      db.devices = [];
+      guardarDB();
+      renderDispositivos();
+      limpiarFormDevice();
+      if(document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
+    });
+  });
+});
 
 document.getElementById('btnExportarDispositivosCsv').addEventListener('click', ()=>{
   if(db.devices.length===0){ alert('No hay dispositivos cargados para exportar.'); return; }
