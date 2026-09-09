@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestor de Herramientas de Trabajo</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root{
     --radius: 12px;
@@ -221,6 +220,14 @@
   .modal{ background:var(--bg-card); border-radius:var(--radius); padding:22px; max-width:420px; width:100%; box-shadow:var(--shadow-md); }
   .modal h3{ margin-top:0; }
   .chart-box{ position:relative; height:230px; }
+  .bar-list{ display:flex; flex-direction:column; gap:0; }
+  .bar-row{ display:flex; align-items:center; gap:10px; margin-bottom:11px; font-size:13px; }
+  .bar-row:last-child{ margin-bottom:0; }
+  .bar-row .blabel{ width:100px; flex-shrink:0; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
+  .bar-track{ flex:1; background:var(--bg-soft); border-radius:6px; height:15px; overflow:hidden; }
+  .bar-fill{ height:100%; border-radius:6px; transition:width .3s ease; background:var(--accent); }
+  .bar-value{ width:32px; text-align:right; font-weight:700; flex-shrink:0; }
+  .devstats-bar{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
   .two-col-form{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
   @media(max-width:600px){ .two-col-form{ grid-template-columns:1fr; } }
   .file-input-hidden{ display:none; }
@@ -403,6 +410,7 @@
 
       <div class="card">
         <h3>Inventario de dispositivos <span class="badge-count" id="devCount">0</span></h3>
+        <div class="devstats-bar" id="devStatsBar"></div>
         <div class="toolbar">
           <input type="text" id="devBuscar" placeholder="Buscar por marca..." class="grow">
           <select id="devFiltroTipo">
@@ -430,6 +438,7 @@
       <p class="sub">El archivo debe tener las columnas <strong>Nro Legajo</strong> (DNI del operario) y <strong>Nombre</strong> (formato "Legajos.csv"). Si un legajo ya existe se actualiza el nombre; si es nuevo, se agrega. Los legajos que no figuren en el archivo no se eliminan automáticamente.</p>
       <div class="btn-row" style="margin-top:0;">
         <button class="btn secondary" id="btnImportarLegajosCsv">Importar Legajos.csv</button>
+        <button class="btn ghost" id="btnExportarLegajos">Exportar legajos</button>
         <button class="btn danger" id="btnLimpiarLegajos">Limpiar legajos</button>
         <input type="file" id="legajosCsvFile" class="file-input-hidden" accept=".csv,text/csv">
       </div>
@@ -517,17 +526,17 @@
     <div class="grid cols-2" style="margin-bottom:18px;">
       <div class="card">
         <h3>Uso por tipo de dispositivo</h3>
-        <div class="chart-box"><canvas id="chartTipo"></canvas></div>
+        <div class="bar-list" id="chartTipo"></div>
       </div>
       <div class="card">
         <h3>Operarios con más movimientos</h3>
-        <div class="chart-box"><canvas id="chartOperarios"></canvas></div>
+        <div class="bar-list" id="chartOperarios"></div>
       </div>
     </div>
     <div class="grid cols-2" style="margin-bottom:18px;">
       <div class="card">
         <h3>Flujo de movimientos (últimos 30 días)</h3>
-        <div class="chart-box"><canvas id="chartFlujo"></canvas></div>
+        <div class="chart-box" id="chartFlujo"></div>
       </div>
       <div class="card">
         <h3>Alertas — dispositivos con observaciones</h3>
@@ -554,16 +563,21 @@
   <section class="view" id="view-reportes">
     <div class="card">
       <h2>Reportes</h2>
-      <p class="sub">Generá un reporte mensual o anual de uso de dispositivos, o de los envíos a mantenimiento.</p>
+      <p class="sub">Generá un reporte diario, semanal, mensual o anual de uso de dispositivos, o de los envíos a mantenimiento.</p>
       <div class="toolbar">
         <select id="repCategoria">
           <option value="movimientos">Uso de dispositivos</option>
           <option value="mantenimientos">Mantenimientos</option>
         </select>
         <select id="repModo">
-          <option value="mensual">Mensual</option>
+          <option value="diario">Diario</option>
+          <option value="semanal">Semanal (desde - hasta)</option>
+          <option value="mensual" selected>Mensual</option>
           <option value="anual">Anual</option>
         </select>
+        <input type="date" id="repFechaDia" style="display:none;">
+        <input type="date" id="repFechaDesde" style="display:none;" title="Desde">
+        <input type="date" id="repFechaHasta" style="display:none;" title="Hasta">
         <select id="repMes"></select>
         <select id="repAnio"></select>
         <button class="btn secondary" id="btnGenerarReporte">Generar reporte</button>
@@ -1095,6 +1109,18 @@ document.getElementById('btnGuardarDevice').addEventListener('click', ()=>{
   }
 });
 
+function renderDevStatsBar(filtroActivo){
+  const tipos = ['Celular','RING SCANNER','Tablet','Llave'];
+  const bar = document.getElementById('devStatsBar');
+  const chips = tipos.map(t=>{
+    const n = db.devices.filter(d=>d.tipo===t).length;
+    const activo = filtroActivo===t;
+    return `<span class="pill ${activo?'ok':'neutral'}">${escapeHtml(t)}: ${n}</span>`;
+  });
+  chips.push(`<span class="pill" style="background:var(--accent); color:#fff;">Total: ${db.devices.length}</span>`);
+  bar.innerHTML = chips.join('');
+}
+
 function renderDispositivos(){
   const buscar = (document.getElementById('devBuscar').value||'').toLowerCase();
   const filtroTipo = document.getElementById('devFiltroTipo').value;
@@ -1105,6 +1131,7 @@ function renderDispositivos(){
     return true;
   });
   document.getElementById('devCount').textContent = db.devices.length;
+  renderDevStatsBar(filtroTipo);
   const tbody = document.getElementById('devTbody');
   if(list.length===0){
     tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><span>📦</span>No hay dispositivos cargados todavía.</div></td></tr>`;
@@ -1314,7 +1341,6 @@ document.getElementById('perTbody').addEventListener('click', (e)=>{
 });
 
 /* ============ DASHBOARD ============ */
-let charts = {};
 function renderDashboard(){
   document.getElementById('statDispositivos').textContent = db.devices.length;
   document.getElementById('statEnUso').textContent = db.devices.filter(d=>d.estado==='en_uso').length;
@@ -1374,47 +1400,71 @@ function chartColors(){
   };
 }
 
-function renderCharts(){
+// Gráfico de barras horizontales, propio (sin dependencias externas)
+function renderBarList(containerId, items, colorFn){
+  const el = document.getElementById(containerId);
+  if(!items || items.length===0 || items.every(i=>i.value===0)){
+    el.innerHTML = `<div class="empty-state"><span>📊</span>Todavía no hay movimientos registrados para mostrar acá.</div>`;
+    return;
+  }
+  const max = Math.max(1, ...items.map(i=>i.value));
+  el.innerHTML = items.map((i,idx)=>`
+    <div class="bar-row">
+      <div class="blabel" title="${escapeHtml(i.label)}">${escapeHtml(i.label)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(i.value/max*100)}%; background:${colorFn?colorFn(idx):'var(--accent)'};"></div></div>
+      <div class="bar-value">${i.value}</div>
+    </div>`).join('');
+}
+
+// Gráfico de línea/área simple con SVG, propio (sin dependencias externas)
+function renderFlujoChart(containerId, dias, valores){
+  const el = document.getElementById(containerId);
   const c = chartColors();
-  Chart.defaults.color = c.text;
-  Chart.defaults.borderColor = c.grid;
-  Chart.defaults.font.family = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
-
-  // Chart 1: por tipo
-  const tipos = ['Celular','RING SCANNER','Tablet','Llave'];
-  const countsTipo = tipos.map(t => db.movimientos.filter(m=>{
-    const dv = findDevice(m.deviceId); return dv && dv.tipo===t;
-  }).length);
-  if(charts.tipo) charts.tipo.destroy();
-  charts.tipo = new Chart(document.getElementById('chartTipo'), {
-    type:'doughnut',
-    data:{ labels:tipos, datasets:[{ data:countsTipo, backgroundColor:['#2563eb','#e8690c','#17a24a','#9333ea'], borderWidth:0 }]},
-    options:{ maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+  const max = Math.max(1, ...valores);
+  const w = 600, h = 170, pad = 8;
+  const stepX = valores.length>1 ? (w-2*pad)/(valores.length-1) : 0;
+  const pts = valores.map((v,idx)=>{
+    const x = pad + idx*stepX;
+    const y = h - pad - (v/max)*(h-2*pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
+  const area = `${pad},${h-pad} ${pts.join(' ')} ${w-pad},${h-pad}`;
+  el.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%; height:170px; display:block;">
+      <polygon points="${area}" fill="${c.accent}" fill-opacity="0.15"></polygon>
+      <polyline points="${pts.join(' ')}" fill="none" stroke="${c.accent}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+    </svg>
+    <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-muted); margin-top:4px;">
+      <span>${fmtFecha(dias[0])}</span>
+      <span>Hoy</span>
+    </div>`;
+}
 
-  // Chart 2: top operarios
+function renderCharts(){
+  // Gráfico 1: uso por tipo de dispositivo
+  const tipos = ['Celular','RING SCANNER','Tablet','Llave'];
+  const coloresTipo = ['#2563eb','#e8690c','#17a24a','#9333ea'];
+  const itemsTipo = tipos.map(t => ({
+    label: t,
+    value: db.movimientos.filter(m=>{ const dv = findDevice(m.deviceId); return dv && dv.tipo===t; }).length
+  }));
+  renderBarList('chartTipo', itemsTipo, (idx)=>coloresTipo[idx]);
+
+  // Gráfico 2: top operarios
   const porOperario = {};
   db.movimientos.forEach(m=>{ porOperario[m.legajo] = (porOperario[m.legajo]||0)+1; });
   const top = Object.entries(porOperario).sort((a,b)=>b[1]-a[1]).slice(0,6);
-  const labelsOp = top.map(([legajo])=>{ const p=findPersonal(legajo); return p? p.apellido : ('#'+legajo); });
-  const dataOp = top.map(([,n])=>n);
-  if(charts.op) charts.op.destroy();
-  charts.op = new Chart(document.getElementById('chartOperarios'), {
-    type:'bar',
-    data:{ labels: labelsOp.length?labelsOp:['Sin datos'], datasets:[{ data: dataOp.length?dataOp:[0], backgroundColor:c.accent, borderRadius:6 }]},
-    options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true, ticks:{precision:0}}} }
+  const itemsOp = top.map(([legajo,n])=>{
+    const p = findPersonal(legajo);
+    return { label: p? p.apellido : ('#'+legajo), value: n };
   });
+  renderBarList('chartOperarios', itemsOp);
 
-  // Chart 3: flujo ultimos 30 dias
+  // Gráfico 3: flujo últimos 30 días
   const dias = [];
   for(let i=29;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); dias.push(d.toISOString().slice(0,10)); }
   const dataFlujo = dias.map(f => db.movimientos.filter(m=>m.fechaEntrega===f).length);
-  if(charts.flujo) charts.flujo.destroy();
-  charts.flujo = new Chart(document.getElementById('chartFlujo'), {
-    type:'line',
-    data:{ labels: dias.map(f=>f.slice(8,10)+'/'+f.slice(5,7)), datasets:[{ data:dataFlujo, borderColor:c.accent, backgroundColor:c.accent+'33', fill:true, tension:.3, pointRadius:0 }]},
-    options:{ maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:8}}, y:{beginAtZero:true, ticks:{precision:0}}} }
-  });
+  renderFlujoChart('chartFlujo', dias, dataFlujo);
 }
 function refreshCharts(){ if(document.getElementById('view-dashboard').classList.contains('active')) renderCharts(); }
 
@@ -1435,9 +1485,25 @@ function poblarSelectoresReporte(){
     selAnio.value = anioActual;
   }
 }
-document.getElementById('repModo').addEventListener('change', ()=>{
-  document.getElementById('repMes').style.display = document.getElementById('repModo').value==='mensual' ? '' : 'none';
-});
+document.getElementById('repModo').addEventListener('change', actualizarCamposReporte);
+function actualizarCamposReporte(){
+  const modo = document.getElementById('repModo').value;
+  document.getElementById('repFechaDia').style.display = modo==='diario' ? '' : 'none';
+  document.getElementById('repFechaDesde').style.display = modo==='semanal' ? '' : 'none';
+  document.getElementById('repFechaHasta').style.display = modo==='semanal' ? '' : 'none';
+  document.getElementById('repMes').style.display = modo==='mensual' ? '' : 'none';
+  document.getElementById('repAnio').style.display = (modo==='mensual'||modo==='anual') ? '' : 'none';
+  if(modo==='diario' && !document.getElementById('repFechaDia').value){
+    document.getElementById('repFechaDia').value = nowISODate();
+  }
+  if(modo==='semanal' && !document.getElementById('repFechaDesde').value){
+    const hoy = new Date();
+    const hace7 = new Date(); hace7.setDate(hoy.getDate()-6);
+    document.getElementById('repFechaDesde').value = hace7.toISOString().slice(0,10);
+    document.getElementById('repFechaHasta').value = hoy.toISOString().slice(0,10);
+  }
+}
+actualizarCamposReporte();
 document.getElementById('repCategoria').addEventListener('change', ()=>{
   const esMnt = document.getElementById('repCategoria').value==='mantenimientos';
   document.getElementById('repTablaMovimientosWrap').style.display = esMnt ? 'none' : '';
@@ -1445,10 +1511,36 @@ document.getElementById('repCategoria').addEventListener('change', ()=>{
   document.getElementById('repResumen').innerHTML = '';
 });
 
+// Devuelve true si la fecha (YYYY-MM-DD) cae dentro del período elegido en el toolbar de reportes
+function fechaEnPeriodoReporte(fechaStr){
+  const modo = document.getElementById('repModo').value;
+  if(modo==='diario'){
+    const dia = document.getElementById('repFechaDia').value;
+    return dia && fechaStr===dia;
+  }
+  if(modo==='semanal'){
+    const desde = document.getElementById('repFechaDesde').value;
+    const hasta = document.getElementById('repFechaHasta').value;
+    if(!desde || !hasta) return false;
+    return fechaStr>=desde && fechaStr<=hasta;
+  }
+  const f = new Date(fechaStr+'T00:00:00');
+  const anio = Number(document.getElementById('repAnio').value);
+  if(f.getFullYear()!==anio) return false;
+  if(modo==='mensual'){
+    const mes = Number(document.getElementById('repMes').value);
+    if(f.getMonth()!==mes) return false;
+  }
+  return true;
+}
+
 let ultimoReporte = [];
 let ultimoReporteCategoria = 'movimientos';
 document.getElementById('btnGenerarReporte').addEventListener('click', generarReporte);
 function generarReporte(){
+  const modo = document.getElementById('repModo').value;
+  if(modo==='diario' && !document.getElementById('repFechaDia').value){ alert('Elegí una fecha.'); return; }
+  if(modo==='semanal' && (!document.getElementById('repFechaDesde').value || !document.getElementById('repFechaHasta').value)){ alert('Completá las fechas "desde" y "hasta".'); return; }
   const categoria = document.getElementById('repCategoria').value;
   ultimoReporteCategoria = categoria;
   if(categoria==='mantenimientos') generarReporteMantenimientos();
@@ -1456,16 +1548,8 @@ function generarReporte(){
 }
 
 function generarReporteMovimientos(){
-  const modo = document.getElementById('repModo').value;
-  const mes = Number(document.getElementById('repMes').value);
-  const anio = Number(document.getElementById('repAnio').value);
-
-  ultimoReporte = db.movimientos.filter(m=>{
-    const f = new Date(m.fechaEntrega+'T00:00:00');
-    if(f.getFullYear()!==anio) return false;
-    if(modo==='mensual' && f.getMonth()!==mes) return false;
-    return true;
-  }).sort((a,b)=>a.fechaEntrega.localeCompare(b.fechaEntrega));
+  ultimoReporte = db.movimientos.filter(m => fechaEnPeriodoReporte(m.fechaEntrega))
+    .sort((a,b)=>a.fechaEntrega.localeCompare(b.fechaEntrega));
 
   const tbody = document.getElementById('repTbody');
   if(ultimoReporte.length===0){
@@ -1500,16 +1584,10 @@ function generarReporteMovimientos(){
 }
 
 function generarReporteMantenimientos(){
-  const modo = document.getElementById('repModo').value;
-  const mes = Number(document.getElementById('repMes').value);
-  const anio = Number(document.getElementById('repAnio').value);
-
   const registros = [];
   db.devices.forEach(d=>{
     (d.mantenimientos||[]).forEach(m=>{
-      const f = new Date(m.fechaEnvio+'T00:00:00');
-      if(f.getFullYear()!==anio) return;
-      if(modo==='mensual' && f.getMonth()!==mes) return;
+      if(!fechaEnPeriodoReporte(m.fechaEnvio)) return;
       registros.push({device: d, mnt: m});
     });
   });
@@ -1545,6 +1623,12 @@ function generarReporteMantenimientos(){
 document.getElementById('btnExportCSV').addEventListener('click', ()=>{
   if(ultimoReporte.length===0){ alert('Generá el reporte primero.'); return; }
   let headers, rows, nombreArchivo;
+  const modo = document.getElementById('repModo').value;
+  let sufijoPeriodo;
+  if(modo==='diario') sufijoPeriodo = document.getElementById('repFechaDia').value;
+  else if(modo==='semanal') sufijoPeriodo = `${document.getElementById('repFechaDesde').value}_a_${document.getElementById('repFechaHasta').value}`;
+  else if(modo==='mensual') sufijoPeriodo = `${document.getElementById('repAnio').value}-${String(Number(document.getElementById('repMes').value)+1).padStart(2,'0')}`;
+  else sufijoPeriodo = document.getElementById('repAnio').value;
 
   if(ultimoReporteCategoria==='mantenimientos'){
     headers = ['Dispositivo','Tipo','FechaEnvio','HoraEnvio','FechaRegreso','HoraRegreso','Estado','ObsEnvio','ObsRegreso'];
@@ -1553,7 +1637,7 @@ document.getElementById('btnExportCSV').addEventListener('click', ()=>{
       mnt.fechaRegreso||'', mnt.horaRegreso||'', mnt.cerrado?'Devuelto':'En mantenimiento',
       mnt.obsEnvio||'', mnt.obsRegreso||''
     ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';'));
-    nombreArchivo = `reporte_mantenimientos_${document.getElementById('repAnio').value}_${document.getElementById('repModo').value}.csv`;
+    nombreArchivo = `reporte_mantenimientos_${sufijoPeriodo}.csv`;
   }else{
     headers = ['Dispositivo','Tipo','Legajo','Operario','FechaEntrega','HoraEntrega','FechaDevolucion','HoraDevolucion','Estado','ObsEntrega','ObsDevolucion'];
     rows = ultimoReporte.map(m=>{
@@ -1565,7 +1649,7 @@ document.getElementById('btnExportCSV').addEventListener('click', ()=>{
         m.estadoDevolucion||'En uso', m.obsEntrega||'', m.obsDevolucion||''
       ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';');
     });
-    nombreArchivo = `reporte_dispositivos_${document.getElementById('repAnio').value}_${document.getElementById('repModo').value}.csv`;
+    nombreArchivo = `reporte_dispositivos_${sufijoPeriodo}.csv`;
   }
 
   const csv = [headers.join(';'), ...rows].join('\r\n');
@@ -1607,6 +1691,20 @@ document.getElementById('importFile').addEventListener('change', (e)=>{
 
 /* ============ IMPORTAR LEGAJOS.CSV ============ */
 document.getElementById('btnImportarLegajosCsv').addEventListener('click', ()=> document.getElementById('legajosCsvFile').click());
+document.getElementById('btnExportarLegajos').addEventListener('click', ()=>{
+  if(db.personal.length===0){ alert('No hay legajos cargados para exportar.'); return; }
+  const headers = ['Nro Legajo','Nombre'];
+  const rows = db.personal.map(p=>{
+    const nombreCompleto = p.nombre ? `${p.apellido} ${p.nombre}` : p.apellido;
+    return [p.legajo, nombreCompleto].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';');
+  });
+  const csv = [headers.join(';'), ...rows].join('\r\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Legajos.csv';
+  a.click();
+});
 document.getElementById('btnLimpiarLegajos').addEventListener('click', ()=>{
   pedirConfirmacion('Limpiar legajos', '¿Está seguro que quiere borrar todo su legajo?', ()=>{
     db.personal = [];
