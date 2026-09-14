@@ -262,6 +262,7 @@
   <button data-view="dispositivos">Dispositivos</button>
   <button data-view="personal">Personal</button>
   <button data-view="inventario">Inventario</button>
+  <button data-view="mantenimiento">Mantenimiento</button>
   <button data-view="alarmas">Alarmas <span class="badge-count alert" id="alarmBadge" style="display:none;"></span></button>
   <button data-view="dashboard">Dashboard</button>
   <button data-view="reportes">Reportes</button>
@@ -500,6 +501,44 @@
     </div>
   </section>
 
+  <!-- VISTA MANTENIMIENTO -->
+  <section class="view" id="view-mantenimiento">
+    <div class="grid cols-2" style="margin-bottom:18px;">
+      <div class="card">
+        <h2>Enviar dispositivo a mantenimiento</h2>
+        <p class="sub">Solo celulares, tablets y ring scanners disponibles pueden enviarse a reparación.</p>
+        <label>Dispositivo</label>
+        <select id="mntDispositivoSelect"></select>
+        <label>Fecha de envío</label>
+        <input type="date" id="mntFechaEnvioGlobal">
+        <label>Motivo (obligatorio)</label>
+        <textarea id="mntMotivoEnvio" placeholder="Por qué se envía a reparación"></textarea>
+        <label>Proveedor de servicio</label>
+        <input type="text" id="mntProveedorEnvio" placeholder="Empresa o persona que retira el equipo">
+        <div class="btn-row">
+          <button class="btn block" id="btnEnviarMantenimientoGlobal">Enviar a mantenimiento</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Dispositivos en mantenimiento <span class="badge-count" id="mntEnCursoCount">0</span></h3>
+        <div id="mntEnCursoBox"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Historial de mantenimientos <span class="badge-count" id="mntHistCount">0</span></h3>
+      <p class="sub">Revisá acá si un equipo reparado recientemente volvió a fallar poco tiempo después, para hacer el reclamo de garantía al proveedor.</p>
+      <div class="btn-row" style="margin-top:0; margin-bottom:14px;">
+        <button class="btn ghost" id="btnInformeMantenimientoPDF">🖨️ Imprimir informe (PDF)</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Dispositivo</th><th>Tipo</th><th>Envío</th><th>Proveedor</th><th>Motivo</th><th>Regreso</th><th>Estado de la reparación</th></tr></thead>
+          <tbody id="mntHistTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- VISTA ALARMAS -->
   <section class="view" id="view-alarmas">
     <div class="card">
@@ -715,6 +754,7 @@ document.getElementById('tabsNav').addEventListener('click', (e)=>{
   if(btn.dataset.view==='dashboard') renderDashboard();
   if(btn.dataset.view==='reportes') { poblarSelectoresReporte(); }
   if(btn.dataset.view==='inventario') renderHistorialAuditorias();
+  if(btn.dataset.view==='mantenimiento') renderMantenimientoTab();
   if(btn.dataset.view==='alarmas') renderAlarmas();
 });
 
@@ -1189,40 +1229,18 @@ document.getElementById('devTbody').addEventListener('click', (e)=>{
   }
 });
 
-/* ============ MANTENIMIENTO DE DISPOSITIVOS ============ */
+/* ============ MANTENIMIENTO (lectura rápida desde la ficha del dispositivo) ============ */
 function renderMantenimientoBox(deviceId){
   const box = document.getElementById('devMantenimientoBox');
   const device = findDevice(deviceId);
   if(!device){ box.innerHTML=''; return; }
   if(!device.mantenimientos) device.mantenimientos = [];
-  const abierto = device.mantenimientos.find(m => !m.cerrado);
 
-  let html = `<div class="card" style="background:var(--bg-soft); margin-top:16px; box-shadow:none;"><h3 style="margin-bottom:10px;">Mantenimiento</h3>`;
-
-  if(device.estado==='en_uso'){
-    html += `<p class="sub">Este dispositivo está entregado a un operario; no se puede enviar a mantenimiento hasta que sea devuelto.</p>`;
-  }else if(abierto){
-    html += `
-      <div class="op-card warn-box" style="display:block;">
-        <div class="name">En mantenimiento desde ${fmtFecha(abierto.fechaEnvio)} ${abierto.horaEnvio}hs</div>
-        ${abierto.obsEnvio? `<div class="legajo">Motivo: ${escapeHtml(abierto.obsEnvio)}</div>` : ''}
-      </div>
-      <label>Fecha de regreso</label>
-      <input type="date" id="mntFechaRegreso" value="${nowISODate()}">
-      <label>Observación de regreso</label>
-      <textarea id="mntObsRegreso" placeholder="Reparación realizada, repuestos, etc."></textarea>
-      <div class="btn-row"><button class="btn block" id="btnRegistrarRegreso">Registrar regreso de mantenimiento</button></div>`;
-  }else{
-    html += `
-      <label>Fecha de envío a mantenimiento</label>
-      <input type="date" id="mntFechaEnvio" value="${nowISODate()}">
-      <label>Observación</label>
-      <textarea id="mntObsEnvio" placeholder="Motivo del envío a mantenimiento"></textarea>
-      <div class="btn-row"><button class="btn secondary block" id="btnEnviarMantenimiento">Enviar a mantenimiento</button></div>`;
-  }
+  let html = `<div class="card" style="background:var(--bg-soft); margin-top:16px; box-shadow:none;"><h3 style="margin-bottom:10px;">Mantenimiento</h3>
+    <p class="sub">Los envíos y regresos de mantenimiento se gestionan desde la pestaña "Mantenimiento".</p>`;
 
   if(device.mantenimientos.length>0){
-    html += `<label style="margin-top:16px;">Historial (${device.mantenimientos.length} vez/veces)</label>
+    html += `<label style="margin-top:6px;">Historial (${device.mantenimientos.length} vez/veces)</label>
       <div class="table-wrap" style="max-height:180px;"><table><thead><tr><th>Envío</th><th>Regreso</th><th>Obs.</th></tr></thead><tbody>`;
     [...device.mantenimientos].sort((a,b)=>b.id-a.id).forEach(m=>{
       html += `<tr>
@@ -1232,37 +1250,195 @@ function renderMantenimientoBox(deviceId){
       </tr>`;
     });
     html += `</tbody></table></div>`;
+  }else{
+    html += `<p class="sub" style="margin-bottom:0;">Este dispositivo todavía no fue enviado a mantenimiento.</p>`;
   }
   html += `</div>`;
   box.innerHTML = html;
-
-  const btnEnviar = document.getElementById('btnEnviarMantenimiento');
-  if(btnEnviar) btnEnviar.addEventListener('click', ()=>{
-    const fecha = document.getElementById('mntFechaEnvio').value || nowISODate();
-    const obs = document.getElementById('mntObsEnvio').value.trim();
-    device.mantenimientos.push({
-      id: Date.now(), fechaEnvio: fecha, horaEnvio: nowTime(), obsEnvio: obs,
-      fechaRegreso: null, horaRegreso: null, obsRegreso: '', cerrado: false
-    });
-    device.estado = 'mantenimiento';
-    guardarDB();
-    renderDispositivos();
-    renderMantenimientoBox(deviceId);
-  });
-  const btnRegreso = document.getElementById('btnRegistrarRegreso');
-  if(btnRegreso) btnRegreso.addEventListener('click', ()=>{
-    const fecha = document.getElementById('mntFechaRegreso').value || nowISODate();
-    const obs = document.getElementById('mntObsRegreso').value.trim();
-    const abiertoM = device.mantenimientos.find(m => !m.cerrado);
-    if(abiertoM){
-      abiertoM.fechaRegreso = fecha; abiertoM.horaRegreso = nowTime(); abiertoM.obsRegreso = obs; abiertoM.cerrado = true;
-    }
-    device.estado = 'disponible';
-    guardarDB();
-    renderDispositivos();
-    renderMantenimientoBox(deviceId);
-  });
 }
+
+/* ============ SECCIÓN MANTENIMIENTO ============ */
+function poblarSelectMantenimiento(){
+  const sel = document.getElementById('mntDispositivoSelect');
+  const valorPrevio = sel.value;
+  const elegibles = db.devices.filter(d => ['Celular','Tablet','RING SCANNER'].includes(d.tipo) && d.estado==='disponible')
+    .sort((a,b)=> a.tipo.localeCompare(b.tipo) || String(a.numero).localeCompare(String(b.numero)));
+  if(elegibles.length===0){
+    sel.innerHTML = `<option value="">No hay dispositivos disponibles para enviar</option>`;
+  }else{
+    sel.innerHTML = elegibles.map(d=>`<option value="${d.id}">${escapeHtml(deviceLabel(d))}</option>`).join('');
+    if(elegibles.some(d=>String(d.id)===valorPrevio)) sel.value = valorPrevio;
+  }
+}
+
+document.getElementById('btnEnviarMantenimientoGlobal').addEventListener('click', ()=>{
+  const deviceId = Number(document.getElementById('mntDispositivoSelect').value);
+  const fecha = document.getElementById('mntFechaEnvioGlobal').value || nowISODate();
+  const motivo = document.getElementById('mntMotivoEnvio').value.trim();
+  const proveedor = document.getElementById('mntProveedorEnvio').value.trim();
+
+  if(!deviceId){ alert('Elegí un dispositivo disponible para enviar a mantenimiento.'); return; }
+  if(!motivo){ alert('El motivo de envío a mantenimiento es obligatorio.'); return; }
+  if(!proveedor){ alert('Completá el proveedor de servicio que retira el equipo.'); return; }
+
+  const device = findDevice(deviceId);
+  if(!device || device.estado!=='disponible'){ alert('Ese dispositivo ya no está disponible. Actualizá la lista.'); poblarSelectMantenimiento(); return; }
+
+  if(!device.mantenimientos) device.mantenimientos = [];
+  device.mantenimientos.push({
+    id: Date.now(), fechaEnvio: fecha, horaEnvio: nowTime(), obsEnvio: motivo, proveedor,
+    fechaRegreso: null, horaRegreso: null, obsRegreso: '', cerrado: false
+  });
+  device.estado = 'mantenimiento';
+  guardarDB();
+
+  document.getElementById('mntMotivoEnvio').value='';
+  document.getElementById('mntProveedorEnvio').value='';
+  document.getElementById('mntFechaEnvioGlobal').value = nowISODate();
+
+  const nombreDispositivo = deviceLabel(device);
+  renderMantenimientoTab();
+  renderDispositivos();
+  alert(`${nombreDispositivo} enviado a mantenimiento.`);
+});
+
+function renderMantenimientoTab(){
+  poblarSelectMantenimiento();
+  if(!document.getElementById('mntFechaEnvioGlobal').value){
+    document.getElementById('mntFechaEnvioGlobal').value = nowISODate();
+  }
+
+  // Dispositivos actualmente en mantenimiento
+  const abiertos = [];
+  db.devices.forEach(d=>{
+    (d.mantenimientos||[]).filter(m=>!m.cerrado).forEach(m=> abiertos.push({device:d, mnt:m}));
+  });
+  document.getElementById('mntEnCursoCount').textContent = abiertos.length;
+  const box = document.getElementById('mntEnCursoBox');
+  if(abiertos.length===0){
+    box.innerHTML = `<div class="empty-state"><span>🔧</span>No hay dispositivos en mantenimiento en este momento.</div>`;
+  }else{
+    box.innerHTML = abiertos.map(({device, mnt})=>{
+      const dias = Math.max(0, Math.floor((Date.now() - new Date(mnt.fechaEnvio+'T'+mnt.horaEnvio+':00').getTime())/86400000));
+      const cerradosPrevios = (device.mantenimientos||[]).filter(x=>x.cerrado && x.id!==mnt.id);
+      const ultimoCierre = cerradosPrevios.sort((a,b)=>String(b.fechaRegreso).localeCompare(String(a.fechaRegreso)))[0];
+      let alertaTemprana = '';
+      if(ultimoCierre && ultimoCierre.fechaRegreso){
+        const diasDesdeReparacion = Math.floor((new Date(mnt.fechaEnvio+'T00:00:00') - new Date(ultimoCierre.fechaRegreso+'T00:00:00'))/86400000);
+        if(diasDesdeReparacion>=0 && diasDesdeReparacion<=30){
+          alertaTemprana = `<div class="pill bad" style="margin-top:8px;">⚠ Posible falla temprana: volvió a fallar ${diasDesdeReparacion} día(s) después de su última reparación (${fmtFecha(ultimoCierre.fechaRegreso)})</div>`;
+        }
+      }
+      return `<div class="op-card" style="display:block;">
+        <div class="name">${escapeHtml(deviceLabel(device))}</div>
+        <div class="legajo">Enviado ${fmtFecha(mnt.fechaEnvio)} ${mnt.horaEnvio}hs (${dias} día/s) · Proveedor: ${escapeHtml(mnt.proveedor||'—')}</div>
+        <div class="legajo">Motivo: ${escapeHtml(mnt.obsEnvio||'—')}</div>
+        ${alertaTemprana}
+        <label style="margin-top:10px;">Fecha de regreso</label>
+        <input type="date" class="mntFechaRegresoRow" data-mov="${mnt.id}" value="${nowISODate()}">
+        <label>Estado de la reparación (observación)</label>
+        <textarea class="mntObsRegresoRow" data-mov="${mnt.id}" placeholder="Qué se reparó / diagnóstico del proveedor"></textarea>
+        <div class="btn-row"><button class="btn secondary block" data-cerrar="${mnt.id}" data-device="${device.id}">Registrar regreso (reparado)</button></div>
+      </div>`;
+    }).join('');
+  }
+
+  // Historial completo
+  const todos = [];
+  db.devices.forEach(d=>{
+    (d.mantenimientos||[]).forEach(m=> todos.push({device:d, mnt:m}));
+  });
+  todos.sort((a,b)=> String(b.mnt.fechaEnvio).localeCompare(String(a.mnt.fechaEnvio)));
+  document.getElementById('mntHistCount').textContent = todos.length;
+  const histBody = document.getElementById('mntHistTbody');
+  if(todos.length===0){
+    histBody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><span>🗂</span>Todavía no se registraron envíos a mantenimiento.</div></td></tr>`;
+  }else{
+    histBody.innerHTML = todos.map(({device, mnt})=>`
+      <tr class="${!mnt.cerrado?'row-alert':''}">
+        <td>${escapeHtml(deviceLabel(device))}</td>
+        <td>${escapeHtml(device.tipo)}</td>
+        <td>${fmtFecha(mnt.fechaEnvio)} ${mnt.horaEnvio}</td>
+        <td>${escapeHtml(mnt.proveedor||'—')}</td>
+        <td>${escapeHtml(mnt.obsEnvio||'—')}</td>
+        <td>${mnt.cerrado? fmtFecha(mnt.fechaRegreso)+' '+mnt.horaRegreso : '<span class="pill warn">Pendiente</span>'}</td>
+        <td>${escapeHtml(mnt.obsRegreso||'—')}</td>
+      </tr>`).join('');
+  }
+}
+
+document.getElementById('mntEnCursoBox').addEventListener('click', (e)=>{
+  const btn = e.target.closest('[data-cerrar]');
+  if(!btn) return;
+  const mntId = Number(btn.dataset.cerrar);
+  const deviceId = Number(btn.dataset.device);
+  const device = findDevice(deviceId);
+  if(!device) return;
+  const mnt = (device.mantenimientos||[]).find(m=>m.id===mntId);
+  if(!mnt) return;
+  const fechaInput = document.querySelector(`.mntFechaRegresoRow[data-mov="${mntId}"]`);
+  const obsInput = document.querySelector(`.mntObsRegresoRow[data-mov="${mntId}"]`);
+  const fecha = fechaInput.value || nowISODate();
+  const obs = obsInput.value.trim();
+
+  mnt.fechaRegreso = fecha; mnt.horaRegreso = nowTime(); mnt.obsRegreso = obs; mnt.cerrado = true;
+  device.estado = 'disponible';
+  guardarDB();
+
+  const nombreDispositivo = deviceLabel(device);
+  renderMantenimientoTab();
+  renderDispositivos();
+  if(document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();
+  alert(`${nombreDispositivo} registrado como reparado y devuelto.`);
+});
+
+document.getElementById('btnInformeMantenimientoPDF').addEventListener('click', ()=>{
+  const registros = [];
+  db.devices.forEach(d=>{
+    (d.mantenimientos||[]).filter(m=>m.cerrado).forEach(m=> registros.push({device:d, mnt:m}));
+  });
+  if(registros.length===0){ alert('Todavía no hay reparaciones cerradas para incluir en el informe.'); return; }
+  registros.sort((a,b)=> String(a.mnt.fechaEnvio).localeCompare(String(b.mnt.fechaEnvio)));
+
+  const filasHtml = registros.map(({device, mnt})=>`
+    <tr>
+      <td>${escapeHtml(deviceLabel(device))}</td>
+      <td>${escapeHtml(device.tipo)}</td>
+      <td>${fmtFecha(mnt.fechaEnvio)} ${mnt.horaEnvio}</td>
+      <td>${fmtFecha(mnt.fechaRegreso)} ${mnt.horaRegreso}</td>
+      <td>${escapeHtml(mnt.proveedor||'—')}</td>
+      <td>${escapeHtml(mnt.obsEnvio||'—')}</td>
+      <td>${escapeHtml(mnt.obsRegreso||'—')}</td>
+    </tr>`).join('');
+
+  const htmlInforme = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Informe de mantenimientos</title>
+  <style>
+    body{ font-family: Arial, Helvetica, sans-serif; padding:28px; color:#111; }
+    h1{ font-size:18px; margin:0 0 4px; }
+    p.sub{ color:#555; font-size:12px; margin:0 0 18px; }
+    table{ width:100%; border-collapse:collapse; font-size:11px; }
+    th, td{ border:1px solid #ccc; padding:6px 8px; text-align:left; vertical-align:top; }
+    th{ background:#f0f0f0; }
+    tr:nth-child(even){ background:#fafafa; }
+    @media print{ .noprint{ display:none; } }
+  </style></head>
+  <body>
+    <h1>Informe de dispositivos reparados</h1>
+    <p class="sub">Generado el ${fmtFecha(nowISODate())} — ${registros.length} reparación(es) cerrada(s) registrada(s)</p>
+    <table>
+      <thead><tr><th>Dispositivo</th><th>Tipo</th><th>Fecha de salida</th><th>Fecha de regreso</th><th>Proveedor</th><th>Motivo de envío</th><th>Estado de la reparación</th></tr></thead>
+      <tbody>${filasHtml}</tbody>
+    </table>
+    <p class="noprint" style="margin-top:20px; color:#777; font-size:12px;">Esta ventana se preparó para imprimir. Usá Ctrl+P / Cmd+P (o el diálogo de impresión) y elegí "Guardar como PDF" si no se abrió automáticamente.</p>
+    <script>window.onload = function(){ window.print(); };<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if(!w){ alert('El navegador bloqueó la ventana emergente. Habilitá los pop-ups del sitio para generar el informe.'); return; }
+  w.document.open();
+  w.document.write(htmlInforme);
+  w.document.close();
+});
 
 /* ============ PERSONAL (ABM) ============ */
 function limpiarFormPersonal(){
