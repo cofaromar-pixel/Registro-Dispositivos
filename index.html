@@ -228,6 +228,30 @@
   .bar-fill{ height:100%; border-radius:6px; transition:width .3s ease; background:var(--accent); }
   .bar-value{ width:32px; text-align:right; font-weight:700; flex-shrink:0; }
   .devstats-bar{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+
+  /* Paleta suave por tipo de dispositivo — misma paleta que el gráfico "Uso por tipo" del Dashboard */
+  :root{
+    --dev-celular: 37,99,235;
+    --dev-ring: 232,105,12;
+    --dev-tablet: 23,162,74;
+    --dev-llave: 147,51,234;
+  }
+  .dev-chip-celular{ background:rgba(var(--dev-celular),0.16); color:rgb(var(--dev-celular)); }
+  .dev-chip-ring{ background:rgba(var(--dev-ring),0.16); color:rgb(var(--dev-ring)); }
+  .dev-chip-tablet{ background:rgba(var(--dev-tablet),0.16); color:rgb(var(--dev-tablet)); }
+  .dev-chip-llave{ background:rgba(var(--dev-llave),0.16); color:rgb(var(--dev-llave)); }
+  .dev-chip-celular.active{ background:rgb(var(--dev-celular)); color:#fff; }
+  .dev-chip-ring.active{ background:rgb(var(--dev-ring)); color:#fff; }
+  .dev-chip-tablet.active{ background:rgb(var(--dev-tablet)); color:#fff; }
+  .dev-chip-llave.active{ background:rgb(var(--dev-llave)); color:#fff; }
+
+  .devgroup{ border-radius:10px; padding:12px 14px; margin-bottom:14px; border-left:4px solid; }
+  .devgroup-celular{ background:rgba(var(--dev-celular),0.09); border-left-color:rgb(var(--dev-celular)); }
+  .devgroup-ring{ background:rgba(var(--dev-ring),0.09); border-left-color:rgb(var(--dev-ring)); }
+  .devgroup-tablet{ background:rgba(var(--dev-tablet),0.09); border-left-color:rgb(var(--dev-tablet)); }
+  .devgroup-llave{ background:rgba(var(--dev-llave),0.09); border-left-color:rgb(var(--dev-llave)); }
+  .devgroup .two-col-form{ margin:0; }
+  .devgroup label:first-child{ margin-top:0; }
   .two-col-form{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
   @media(max-width:600px){ .two-col-form{ grid-template-columns:1fr; } }
   .file-input-hidden{ display:none; }
@@ -288,47 +312,55 @@
           </div>
           <div id="entOperarioBox"></div>
 
-          <div class="two-col-form">
-            <div>
-              <label>Nº de Celular</label>
-              <input type="text" id="entNroCel" placeholder="Ej: C-014" autocomplete="off">
-            </div>
-            <div>
-              <label>Observación</label>
-              <input type="text" id="entObsCel" placeholder="Opcional" autocomplete="off">
-            </div>
-          </div>
-
-          <div class="two-col-form">
-            <div>
-              <label>Nº de Ring Scanner</label>
-              <input type="text" id="entNroRing" placeholder="Ej: RS-032" autocomplete="off">
-            </div>
-            <div>
-              <label>Observación</label>
-              <input type="text" id="entObsRing" placeholder="Opcional" autocomplete="off">
+          <div class="devgroup devgroup-celular">
+            <div class="two-col-form">
+              <div>
+                <label>Nº de Celular</label>
+                <input type="text" id="entNroCel" placeholder="Ej: C-014" autocomplete="off">
+              </div>
+              <div>
+                <label>Observación</label>
+                <input type="text" id="entObsCel" placeholder="Opcional" autocomplete="off">
+              </div>
             </div>
           </div>
 
-          <div class="two-col-form">
-            <div>
-              <label>Nº de Tablet</label>
-              <input type="text" id="entNroTablet" placeholder="Ej: T-005" autocomplete="off">
-            </div>
-            <div>
-              <label>Observación</label>
-              <input type="text" id="entObsTablet" placeholder="Opcional" autocomplete="off">
+          <div class="devgroup devgroup-ring">
+            <div class="two-col-form">
+              <div>
+                <label>Nº de Ring Scanner</label>
+                <input type="text" id="entNroRing" placeholder="Ej: RS-032" autocomplete="off">
+              </div>
+              <div>
+                <label>Observación</label>
+                <input type="text" id="entObsRing" placeholder="Opcional" autocomplete="off">
+              </div>
             </div>
           </div>
 
-          <div class="two-col-form">
-            <div>
-              <label>Nº de Llave</label>
-              <input type="text" id="entNroLlave" placeholder="Ej: LL-007" autocomplete="off">
+          <div class="devgroup devgroup-tablet">
+            <div class="two-col-form">
+              <div>
+                <label>Nº de Tablet</label>
+                <input type="text" id="entNroTablet" placeholder="Ej: T-005" autocomplete="off">
+              </div>
+              <div>
+                <label>Observación</label>
+                <input type="text" id="entObsTablet" placeholder="Opcional" autocomplete="off">
+              </div>
             </div>
-            <div>
-              <label>Observación</label>
-              <input type="text" id="entObsLlave" placeholder="Opcional" autocomplete="off">
+          </div>
+
+          <div class="devgroup devgroup-llave">
+            <div class="two-col-form">
+              <div>
+                <label>Nº de Llave</label>
+                <input type="text" id="entNroLlave" placeholder="Ej: LL-007" autocomplete="off">
+              </div>
+              <div>
+                <label>Observación</label>
+                <input type="text" id="entObsLlave" placeholder="Opcional" autocomplete="off">
+              </div>
             </div>
           </div>
 
@@ -399,7 +431,7 @@
             <label>Tipo</label>
             <select id="devTipo">
               <option value="Celular">Celular</option>
-              <option value="RING SCANNER">RING SCANNER</option>
+              <option value="RING SCANNER">Ring Scanner</option>
               <option value="Tablet">Tablet</option>
               <option value="Llave">Llave</option>
             </select>
@@ -438,7 +470,7 @@
           <select id="devFiltroTipo">
             <option value="">Todos los tipos</option>
             <option value="Celular">Celular</option>
-            <option value="RING SCANNER">RING SCANNER</option>
+            <option value="RING SCANNER">Ring Scanner</option>
             <option value="Tablet">Tablet</option>
             <option value="Llave">Llave</option>
           </select>
@@ -738,7 +770,7 @@ function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'
 
 /* ============ TEMA ============ */
 function initTheme(){
-  const theme = localStorage.getItem('gh_theme') || 'light';
+  const theme = localStorage.getItem('gh_theme') || 'dark';
   const accent = localStorage.getItem('gh_accent') || 'azul';
   document.documentElement.setAttribute('data-theme', theme);
   document.documentElement.setAttribute('data-accent', accent);
@@ -843,9 +875,16 @@ document.getElementById('tabDevolucion').addEventListener('click', ()=>{
   document.getElementById('devLegajo').focus();
 });
 
+// Nombre de tipo para mostrar al usuario (los datos internos siguen usando "RING SCANNER" para no romper compatibilidad)
+function tipoDisplay(tipo){
+  return tipo==='RING SCANNER' ? 'Ring Scanner' : tipo;
+}
+function tipoSlug(tipo){
+  return { 'Celular':'celular', 'RING SCANNER':'ring', 'Tablet':'tablet', 'Llave':'llave' }[tipo] || 'otro';
+}
 function deviceLabel(d){
   if(!d) return '—';
-  return `${d.tipo} #${d.numero}` + (d.marca ? ' — ' + d.marca : '');
+  return `${tipoDisplay(d.tipo)} #${d.numero}` + (d.marca ? ' — ' + d.marca : '');
 }
 
 // Crea un dispositivo nuevo (solo debe llamarse tras confirmar la clave, o desde altas ya autorizadas)
@@ -1183,7 +1222,7 @@ function renderDevStatsBar(filtroActivo){
   const chips = tipos.map(t=>{
     const n = db.devices.filter(d=>d.tipo===t).length;
     const activo = filtroActivo===t;
-    return `<span class="pill ${activo?'ok':'neutral'}">${escapeHtml(t)}: ${n}</span>`;
+    return `<span class="pill dev-chip-${tipoSlug(t)} ${activo?'active':''}">${escapeHtml(tipoDisplay(t))}: ${n}</span>`;
   });
   chips.push(`<span class="pill" style="background:var(--accent); color:#fff;">Total: ${db.devices.length}</span>`);
   bar.innerHTML = chips.join('');
@@ -1214,7 +1253,7 @@ function renderDispositivos(){
   };
   tbody.innerHTML = list.map(d=>`
     <tr>
-      <td>${escapeHtml(d.tipo)}</td>
+      <td>${escapeHtml(tipoDisplay(d.tipo))}</td>
       <td>${escapeHtml(d.numero||'—')}</td>
       <td>${escapeHtml(d.marca||'—')}</td>
       <td>${fmtFecha(d.fechaIngreso)}</td>
@@ -1385,7 +1424,7 @@ function renderMantenimientoTab(){
     histBody.innerHTML = todos.map(({device, mnt})=>`
       <tr class="${!mnt.cerrado?'row-alert':''}">
         <td>${escapeHtml(deviceLabel(device))}</td>
-        <td>${escapeHtml(device.tipo)}</td>
+        <td>${escapeHtml(tipoDisplay(device.tipo))}</td>
         <td>${fmtFecha(mnt.fechaEnvio)} ${mnt.horaEnvio}</td>
         <td>${escapeHtml(mnt.proveedor||'—')}</td>
         <td>${escapeHtml(mnt.obsEnvio||'—')}</td>
@@ -1431,7 +1470,7 @@ document.getElementById('btnInformeMantenimientoPDF').addEventListener('click', 
   const filasHtml = registros.map(({device, mnt})=>`
     <tr>
       <td>${escapeHtml(deviceLabel(device))}</td>
-      <td>${escapeHtml(device.tipo)}</td>
+      <td>${escapeHtml(tipoDisplay(device.tipo))}</td>
       <td>${fmtFecha(mnt.fechaEnvio)} ${mnt.horaEnvio}</td>
       <td>${fmtFecha(mnt.fechaRegreso)} ${mnt.horaRegreso}</td>
       <td>${escapeHtml(mnt.proveedor||'—')}</td>
@@ -1561,7 +1600,7 @@ function renderDashboard(){
       const dias = abierto ? Math.max(0, Math.floor((Date.now() - new Date(abierto.fechaEnvio+'T'+abierto.horaEnvio+':00').getTime())/86400000)) : '—';
       return `<tr class="row-alert">
         <td>${escapeHtml(deviceLabel(d))}</td>
-        <td>${escapeHtml(d.tipo)}</td>
+        <td>${escapeHtml(tipoDisplay(d.tipo))}</td>
         <td>${abierto? fmtFecha(abierto.fechaEnvio)+' '+abierto.horaEnvio : '—'}</td>
         <td>${dias}</td>
         <td>${escapeHtml(abierto&&abierto.obsEnvio ? abierto.obsEnvio : '—')}</td>
@@ -1649,7 +1688,7 @@ function renderCharts(){
   const tipos = ['Celular','RING SCANNER','Tablet','Llave'];
   const coloresTipo = ['#2563eb','#e8690c','#17a24a','#9333ea'];
   const itemsTipo = tipos.map(t => ({
-    label: t,
+    label: tipoDisplay(t),
     value: db.movimientos.filter(m=>{ const dv = findDevice(m.deviceId); return dv && dv.tipo===t; }).length
   }));
   renderBarList('chartTipo', itemsTipo, (idx)=>coloresTipo[idx]);
@@ -1765,7 +1804,7 @@ function generarReporteMovimientos(){
       const alerta = m.estadoDevolucion==='Dañado' || m.estadoDevolucion==='Extraviado';
       return `<tr class="${alerta?'row-alert':''}">
         <td>${device?escapeHtml(device.numero||device.marca||''):'—'}</td>
-        <td>${device?escapeHtml(device.tipo):'—'}</td>
+        <td>${device?escapeHtml(tipoDisplay(device.tipo)):'—'}</td>
         <td>#${escapeHtml(String(m.legajo))}</td>
         <td>${persona?escapeHtml(fullName(persona)):'—'}</td>
         <td>${fmtFecha(m.fechaEntrega)} ${m.horaEntrega}</td>
@@ -1805,7 +1844,7 @@ function generarReporteMantenimientos(){
     tbody.innerHTML = registros.map(({device, mnt})=>`
       <tr class="${!mnt.cerrado?'row-alert':''}">
         <td>${escapeHtml(device.numero||device.marca||'')}</td>
-        <td>${escapeHtml(device.tipo)}</td>
+        <td>${escapeHtml(tipoDisplay(device.tipo))}</td>
         <td>${fmtFecha(mnt.fechaEnvio)} ${mnt.horaEnvio}</td>
         <td>${mnt.cerrado? fmtFecha(mnt.fechaRegreso)+' '+mnt.horaRegreso : '—'}</td>
         <td>${mnt.cerrado? '<span class="pill ok">Devuelto</span>' : '<span class="pill warn">En mantenimiento</span>'}</td>
