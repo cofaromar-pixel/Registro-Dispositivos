@@ -290,31 +290,52 @@
 
           <div class="two-col-form">
             <div>
-              <label>Tipo</label>
-              <select id="entTipoCel">
-                <option value="Celular" selected>Celular</option>
-                <option value="Tablet">Tablet</option>
-              </select>
+              <label>Nº de Celular</label>
+              <input type="text" id="entNroCel" placeholder="Ej: C-014" autocomplete="off">
             </div>
             <div>
-              <label>Nº de Celular / Tablet</label>
-              <input type="text" id="entNroCel" placeholder="Ej: C-014" autocomplete="off">
+              <label>Observación</label>
+              <input type="text" id="entObsCel" placeholder="Opcional" autocomplete="off">
             </div>
           </div>
 
-          <label>Nº de Ring Scanner</label>
-          <input type="text" id="entNroRing" placeholder="Ej: RS-032" autocomplete="off">
+          <div class="two-col-form">
+            <div>
+              <label>Nº de Ring Scanner</label>
+              <input type="text" id="entNroRing" placeholder="Ej: RS-032" autocomplete="off">
+            </div>
+            <div>
+              <label>Observación</label>
+              <input type="text" id="entObsRing" placeholder="Opcional" autocomplete="off">
+            </div>
+          </div>
 
-          <label>Nº de Llave</label>
-          <input type="text" id="entNroLlave" placeholder="Ej: LL-007" autocomplete="off">
+          <div class="two-col-form">
+            <div>
+              <label>Nº de Tablet</label>
+              <input type="text" id="entNroTablet" placeholder="Ej: T-005" autocomplete="off">
+            </div>
+            <div>
+              <label>Observación</label>
+              <input type="text" id="entObsTablet" placeholder="Opcional" autocomplete="off">
+            </div>
+          </div>
 
-          <label>Observación</label>
-          <textarea id="entObs" placeholder="En blanco si no hay novedades"></textarea>
+          <div class="two-col-form">
+            <div>
+              <label>Nº de Llave</label>
+              <input type="text" id="entNroLlave" placeholder="Ej: LL-007" autocomplete="off">
+            </div>
+            <div>
+              <label>Observación</label>
+              <input type="text" id="entObsLlave" placeholder="Opcional" autocomplete="off">
+            </div>
+          </div>
 
           <div class="btn-row">
             <button class="btn block" id="btnConfirmarEntrega">Confirmar entrega (OK)</button>
           </div>
-          <p class="sub" style="margin-top:12px;">Completá el/los números de los equipos que corresponda entregar (celular/tablet, ring scanner y/o llave).</p>
+          <p class="sub" style="margin-top:12px;">Completá el/los números de los equipos que corresponda entregar (celular, ring scanner, tablet y/o llave). Cada uno tiene su propio campo de observación.</p>
         </div>
 
         <!-- DEVOLUCION -->
@@ -898,21 +919,25 @@ document.getElementById('devLegajoSuggest').addEventListener('mousedown', (e)=>{
 
 document.getElementById('btnConfirmarEntrega').addEventListener('click', ()=>{
   const legajo = document.getElementById('entLegajo').value.trim();
-  const tipoCel = document.getElementById('entTipoCel').value;
   const nroCel = document.getElementById('entNroCel').value.trim();
+  const obsCel = document.getElementById('entObsCel').value.trim();
   const nroRing = document.getElementById('entNroRing').value.trim();
+  const obsRing = document.getElementById('entObsRing').value.trim();
+  const nroTablet = document.getElementById('entNroTablet').value.trim();
+  const obsTablet = document.getElementById('entObsTablet').value.trim();
   const nroLlave = document.getElementById('entNroLlave').value.trim();
-  const obs = document.getElementById('entObs').value.trim();
+  const obsLlave = document.getElementById('entObsLlave').value.trim();
 
   if(!legajo){ alert('Ingresá el número de legajo del operario.'); document.getElementById('entLegajo').focus(); return; }
   const persona = findPersonal(legajo);
   if(!persona){ alert('El legajo no está registrado. Cargalo en la pestaña "Personal" antes de continuar.'); return; }
-  if(!nroCel && !nroRing && !nroLlave){ alert('Ingresá al menos un número de dispositivo (celular/tablet, ring scanner o llave).'); return; }
+  if(!nroCel && !nroRing && !nroTablet && !nroLlave){ alert('Ingresá al menos un número de dispositivo (celular, ring scanner, tablet o llave).'); return; }
 
   const pendientes = [];
-  if(nroCel) pendientes.push({tipo: tipoCel, numero: nroCel});
-  if(nroRing) pendientes.push({tipo: 'RING SCANNER', numero: nroRing});
-  if(nroLlave) pendientes.push({tipo: 'Llave', numero: nroLlave});
+  if(nroCel) pendientes.push({tipo: 'Celular', numero: nroCel, obs: obsCel});
+  if(nroRing) pendientes.push({tipo: 'RING SCANNER', numero: nroRing, obs: obsRing});
+  if(nroTablet) pendientes.push({tipo: 'Tablet', numero: nroTablet, obs: obsTablet});
+  if(nroLlave) pendientes.push({tipo: 'Llave', numero: nroLlave, obs: obsLlave});
 
   // Clasificar: existentes disponibles, existentes no disponibles (rechaza) y no registrados (requieren clave)
   const noRegistrados = [];
@@ -936,7 +961,7 @@ document.getElementById('btnConfirmarEntrega').addEventListener('click', ()=>{
       if(!device) device = crearDispositivo(pend.tipo, pend.numero, '', 'Alta autorizada con clave desde Entregar dispositivo — completar marca si corresponde.');
       const mov = {
         id: db.seq.mov++, deviceId: device.id, legajo: persona.legajo,
-        fechaEntrega: fecha, horaEntrega: hora, obsEntrega: obs,
+        fechaEntrega: fecha, horaEntrega: hora, obsEntrega: pend.obs,
         fechaDevolucion: null, horaDevolucion: null, estadoDevolucion: null, obsDevolucion: '', cerrado: false
       };
       db.movimientos.push(mov);
@@ -947,10 +972,13 @@ document.getElementById('btnConfirmarEntrega').addEventListener('click', ()=>{
 
     document.getElementById('entLegajo').value='';
     document.getElementById('entNroCel').value='';
+    document.getElementById('entObsCel').value='';
     document.getElementById('entNroRing').value='';
+    document.getElementById('entObsRing').value='';
+    document.getElementById('entNroTablet').value='';
+    document.getElementById('entObsTablet').value='';
     document.getElementById('entNroLlave').value='';
-    document.getElementById('entTipoCel').value='Celular';
-    document.getElementById('entObs').value='';
+    document.getElementById('entObsLlave').value='';
     document.getElementById('entOperarioBox').innerHTML='';
     renderHistorial();
     renderDispositivos();
